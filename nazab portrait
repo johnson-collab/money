@@ -1,10 +1,3 @@
-local origin = CFrame.new()
-local function Cea(x,y,z) return CFrame.Angles(x,y,z) end
-local function Vec(x,y,z) return Vector3.new(x,y,z) end
-local function AddBP(n,cf,t)
-    -- implement your AddBP logic here
-end
-
 AddBP('Floor1Tiny',origin*Cea(0,1.5707963705062866,0)+Vec(0,199,-99.5),'GreenSwampy')
 AddBP('Floor1Tiny',origin*Cea(0,1.5707963705062866,0)+Vec(1,199,-99.5),'GreenSwampy')
 AddBP('Floor1Tiny',origin*Cea(0,1.5707963705062866,0)+Vec(2,199,-99.5),'GreenSwampy')
