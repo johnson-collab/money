@@ -553,6 +553,9 @@ header p{
         <button class="tbtn" id="btnLine" onclick="setTool('line')">&#9135; Line</button>
         <button class="tbtn" id="btnEyedrop" onclick="setTool('eyedrop')">&#128065; Pick</button>
       </div>
+      <div class="tool-row" style="margin-top:4px">
+        <button class="tbtn" id="btnRecolor" onclick="setTool('recolor')">&#11036; Recolor</button>
+      </div>
     </div>
 
     <!-- Brush size -->
@@ -585,6 +588,34 @@ header p{
           <button class="tbtn" id="textMd" onclick="setTextSize(2)">2x</button>
           <button class="tbtn" id="textLg" onclick="setTextSize(3)">3x</button>
         </div>
+      </div>
+    </div>
+    <!-- Recolor tool panel -->
+    <div class="tool-group" id="recolorToolGroup" style="display:none">
+      <div class="tg-label">Recolor</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        <div style="flex:1">
+          <div style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--mut);margin-bottom:3px">FROM</div>
+          <div style="display:flex;align-items:center;gap:4px;cursor:pointer" onclick="pickRecolorFrom()">
+            <div id="recolorFromSwatch" style="width:14px;height:14px;border:2px solid var(--bord2);background:#666;flex-shrink:0"></div>
+            <span style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--lime)" id="recolorFromName">click to pick</span>
+          </div>
+        </div>
+        <div style="font-family:'VT323',monospace;font-size:1.2rem;color:var(--mut)">→</div>
+        <div style="flex:1">
+          <div style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--mut);margin-bottom:3px">TO</div>
+          <div style="display:flex;align-items:center;gap:4px;cursor:pointer" onclick="pickRecolorTo()">
+            <div id="recolorToSwatch" style="width:14px;height:14px;border:2px solid var(--bord2);background:#888;flex-shrink:0"></div>
+            <span style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--lime)" id="recolorToName">click to pick</span>
+          </div>
+        </div>
+      </div>
+      <div class="tool-row" style="margin-bottom:5px">
+        <button class="tbtn active" id="recolorModeBox" onclick="setRecolorMode('box')">&#9645; Box</button>
+        <button class="tbtn" id="recolorModeLasso" onclick="setRecolorMode('lasso')">&#9099; Lasso</button>
+      </div>
+      <div style="font-family:'VT323',monospace;font-size:.8rem;color:var(--mut);line-height:1.4">
+        Drag to select. Only FROM color pixels are replaced.
       </div>
     </div>
     <div class="tool-group">
@@ -665,12 +696,19 @@ header p{
     <div style="height:10px"></div>
     <div class="ptitle">COLOR MAPPING OPTIONS</div>
     <div class="dis-row" style="padding:5px 4px;background:var(--surf2);border:2px solid var(--bord2);margin-bottom:8px;cursor:pointer" onclick="toggleSpookyMode()" id="spookyToggleRow">
-      <div class="dis-dot" style="background:rgb(170,85,0)"></div>
+      <div class="dis-dot" style="background:rgb(27,16,12)"></div>
       <div style="flex:1">
         <div style="font-family:'Press Start 2P',monospace;font-size:.42rem;color:var(--lime2)">Spooky over Walnut</div>
         <div style="font-family:'VT323',monospace;font-size:.78rem;color:var(--mut);line-height:1.3">Use Spooky for dark/black pixels instead of Walnut</div>
       </div>
       <button class="dis-btn on" id="spookyToggleBtn">✕ OFF</button>
+    </div>
+    <div class="dis-row" style="padding:5px 4px;background:var(--surf2);border:2px solid var(--bord2);margin-bottom:8px;cursor:pointer" onclick="toggleColorMode()" id="colorModeRow">
+      <div style="flex:1">
+        <div style="font-family:'Press Start 2P',monospace;font-size:.42rem;color:var(--lime2)">Color Matching</div>
+        <div style="font-family:'VT323',monospace;font-size:.78rem;color:var(--mut);line-height:1.3" id="colorModeDesc">Simple RGB distance</div>
+      </div>
+      <button class="dis-btn" id="colorModeBtn">RGB</button>
     </div>
 
     <div style="height:4px"></div>
@@ -903,7 +941,7 @@ const WOODS = {
   Birch:[205,205,205],Walnut:[105,64,40],Koa:[143,76,42],Volcano:[255,0,0],
   GreenSwampy:[52,142,64],GoldSwampy:[226,155,64],Palm:[226,220,188],
   SnowGlow:[255,255,0],Frost:[159,243,233],CaveCrawler:[16,42,220],
-  BlueSpruce:[159,173,192],LoneCave:[248,248,248],Spooky:[170,85,0],SpookyNeon:[255,120,0]
+  BlueSpruce:[159,173,192],LoneCave:[248,248,248],Spooky:[27,16,12],SpookyNeon:[255,120,0]
 };
 const WOOD_NAMES = Object.keys(WOODS);
 const PIECE_SIZES = [{name:'Floor1Large',size:4},{name:'Floor1',size:3},{name:'Floor1Small',size:2},{name:'Floor1Tiny',size:1}];
@@ -919,6 +957,10 @@ let activeShape = 'rect';
 let shapeFilled = false;
 let textSize = 1;
 let shapeStart = null;
+let recolorFromWood = null;
+let recolorToWood = null;
+let recolorMode = 'box'; // 'box' or 'lasso'
+let lassoPoints = [];
 let activeWood = 'Generic';
 let outlineWood = 'Walnut';
 let autoProcess = true;
@@ -933,6 +975,7 @@ let disabledWoods = new Set();
 let cW = 64, cH = 64;
 let pixels = new Array(cW * cH).fill(null); // null = transparent
 let undoStack = [], redoStack = [];
+let rawImportLines = null; // when set, doConvert emits these verbatim instead of repacking
 const MAX_UNDO = 40;
 
 // ── Source image storage (raw RGBA, never modified) ──
@@ -1117,7 +1160,8 @@ function renderCanvas() {
 // ═══════════════════════════════════════════════════════════════
 function drawCursor(px, py) {
   curCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
-  if (activeTool === 'fill') return;
+  const noBrush = activeTool==='fill'||activeTool==='fill-erase'||activeTool==='eyedrop'||activeTool==='recolor'||activeTool==='line'||activeTool==='shape';
+  if (noBrush) return;
   const r = Math.floor((brushSize - 1) / 2);
   const x0 = (px - r) * zoom, y0 = (py - r) * zoom;
   const sz = brushSize * zoom;
@@ -1134,6 +1178,7 @@ function clearCursor() { curCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas
 // UNDO/REDO
 // ═══════════════════════════════════════════════════════════════
 function pushUndo() {
+  rawImportLines = null; // drawing invalidates passthrough
   undoStack.push({ pixels: pixels.slice(), manual: manualPixels.slice() });
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   redoStack = [];
@@ -1298,19 +1343,113 @@ function previewCircle(x0,y0,x1,y1) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// RECOLOR TOOL
+// ═══════════════════════════════════════════════════════════════
+function setRecolorMode(m) {
+  recolorMode = m;
+  document.getElementById('recolorModeBox').classList.toggle('active', m==='box');
+  document.getElementById('recolorModeLasso').classList.toggle('active', m==='lasso');
+}
+function updateRecolorSwatch(which, wood) {
+  const col = woodColor(wood) || '#888';
+  document.getElementById('recolor'+which+'Swatch').style.background = col;
+  document.getElementById('recolor'+which+'Name').textContent = wood;
+}
+function pickRecolorFrom() {
+  // Set picking mode — next eyedrop click sets from
+  recolorPicking = 'from';
+  setTool('eyedrop');
+  document.getElementById('canvasOuter').style.cursor = 'crosshair';
+}
+function pickRecolorTo() {
+  recolorPicking = 'to';
+  setTool('eyedrop');
+  document.getElementById('canvasOuter').style.cursor = 'crosshair';
+}
+let recolorPicking = null;
+
+function applyRecolorBox(x0,y0,x1,y1) {
+  if(!recolorFromWood||!recolorToWood) return;
+  const lx=Math.min(x0,x1),rx=Math.max(x0,x1),ty=Math.min(y0,y1),by=Math.max(y0,y1);
+  pushUndo();
+  for(let y=ty;y<=by;y++) for(let x=lx;x<=rx;x++) {
+    const i=y*cW+x;
+    if(pixels[i]===recolorFromWood) { pixels[i]=recolorToWood; manualPixels[i]=1; }
+  }
+  renderCanvas();
+}
+function applyRecolorLasso(pts) {
+  if(!recolorFromWood||!recolorToWood||pts.length<3) return;
+  // Build bounding box then point-in-polygon test
+  const minX=Math.min(...pts.map(p=>p[0])),maxX=Math.max(...pts.map(p=>p[0]));
+  const minY=Math.min(...pts.map(p=>p[1])),maxY=Math.max(...pts.map(p=>p[1]));
+  pushUndo();
+  for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++) {
+    if(pointInPolygon(x,y,pts)) {
+      const i=y*cW+x;
+      if(pixels[i]===recolorFromWood) { pixels[i]=recolorToWood; manualPixels[i]=1; }
+    }
+  }
+  renderCanvas();
+}
+function pointInPolygon(x,y,pts) {
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function previewSelectionBox(x0,y0,x1,y1) {
+  pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  curCtx.clearRect(0,0,cursorCanvas.width,cursorCanvas.height);
+  const lx=Math.min(x0,x1),rx=Math.max(x0,x1),ty=Math.min(y0,y1),by=Math.max(y0,y1);
+  // Highlight matching pixels in tint on preview layer
+  if(recolorFromWood) {
+    pCtx.fillStyle=(woodColor(recolorFromWood)||'#fff')+'55';
+    for(let y=ty;y<=by;y++) for(let x=lx;x<=rx;x++)
+      if(pixels[y*cW+x]===recolorFromWood) pCtx.fillRect(x*zoom,y*zoom,zoom,zoom);
+  }
+  // Dashed selection rectangle on cursor layer
+  curCtx.save();
+  curCtx.strokeStyle='rgba(255,255,255,0.9)';
+  curCtx.lineWidth=1.5;
+  curCtx.setLineDash([4,4]);
+  curCtx.strokeRect(lx*zoom+0.5, ty*zoom+0.5, (rx-lx+1)*zoom-1, (by-ty+1)*zoom-1);
+  curCtx.strokeStyle='rgba(0,0,0,0.5)';
+  curCtx.lineWidth=1;
+  curCtx.lineDashOffset=4;
+  curCtx.strokeRect(lx*zoom+0.5, ty*zoom+0.5, (rx-lx+1)*zoom-1, (by-ty+1)*zoom-1);
+  curCtx.restore();
+}
+function previewLassoPath(pts) {
+  if(pts.length<2) return;
+  pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  pCtx.strokeStyle='rgba(255,255,255,0.8)';
+  pCtx.lineWidth=1;
+  pCtx.setLineDash([4,4]);
+  pCtx.beginPath();
+  pCtx.moveTo((pts[0][0]+0.5)*zoom,(pts[0][1]+0.5)*zoom);
+  for(let i=1;i<pts.length;i++) pCtx.lineTo((pts[i][0]+0.5)*zoom,(pts[i][1]+0.5)*zoom);
+  pCtx.stroke();
+  pCtx.setLineDash([]);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // TOOLS
 // ═══════════════════════════════════════════════════════════════
 function setTool(t) {
   activeTool = t;
-  ['Brush','Fill','Erase','FillErase','Line','Eyedrop','Shape'].forEach(n => {
+  ['Brush','Fill','Erase','FillErase','Line','Eyedrop','Shape','Recolor'].forEach(n => {
     const el = document.getElementById('btn'+n);
     if (el) el.classList.toggle('active', t===n.toLowerCase().replace('fillerase','fill-erase'));
   });
   const isFill = t==='fill'||t==='fill-erase';
   const isEye  = t==='eyedrop';
-  document.getElementById('brushSizeGroup').style.display = (isFill||t==='line'||t==='shape'||isEye) ? 'none' : 'block';
+  document.getElementById('brushSizeGroup').style.display = (isFill||t==='line'||t==='shape'||isEye||t==='recolor') ? 'none' : 'block';
   document.getElementById('shapeToolGroup').style.display = t==='shape' ? 'block' : 'none';
-  document.getElementById('canvasOuter').style.cursor = isFill ? 'cell' : isEye ? 'crosshair' : 'none';
+  document.getElementById('recolorToolGroup').style.display = t==='recolor' ? 'block' : 'none';
+  document.getElementById('canvasOuter').style.cursor = isFill ? 'cell' : isEye ? 'crosshair' : t==='recolor' ? 'crosshair' : 'none';
   pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
   shapeStart = null;
 }
@@ -1470,13 +1609,31 @@ editCanvas.addEventListener('mousedown', e => {
   if (activeTool === 'eyedrop') {
     const w = pixels[y*cW+x];
     if (w) {
+      if (recolorPicking === 'from') {
+        recolorFromWood = w;
+        updateRecolorSwatch('From', w);
+        recolorPicking = null;
+        setTool('recolor');
+        return;
+      } else if (recolorPicking === 'to') {
+        recolorToWood = w;
+        updateRecolorSwatch('To', w);
+        recolorPicking = null;
+        setTool('recolor');
+        return;
+      }
       activeWood = w;
-      // Update UI
       document.getElementById('curWoodName').textContent = w;
       document.getElementById('curWoodSwatch').style.background = woodColor(w);
       const btns = document.querySelectorAll('.wood-btn');
       btns.forEach(b => b.classList.toggle('active', b.dataset.wood === w));
     }
+    return;
+  }
+  if (activeTool === 'recolor') {
+    shapeStart = {x,y};
+    lassoPoints = [[x,y]];
+    isDrawing = true;
     return;
   }
   if (activeTool === 'line' || activeTool === 'shape') {
@@ -1510,6 +1667,11 @@ editCanvas.addEventListener('mousemove', e => {
   document.getElementById('coordBar').textContent = 'x:'+x+' y:'+y+'  |  '+cW+'×'+cH;
   drawCursor(x, y);
 
+  if (activeTool==='recolor' && isDrawing && shapeStart) {
+    if(recolorMode==='box') previewSelectionBox(shapeStart.x,shapeStart.y,x,y);
+    else { lassoPoints.push([x,y]); previewLassoPath(lassoPoints); }
+    return;
+  }
   if (activeTool==='line' && isDrawing && shapeStart) {
     previewLine(shapeStart.x, shapeStart.y, x, y);
     return;
@@ -1543,7 +1705,13 @@ editCanvas.addEventListener('mouseup', e => {
   if (e.button !== 0) { isDrawing = false; return; }
   const {x,y} = getPixelPos(e);
 
-  if (activeTool === 'line' && shapeStart) {
+  if (activeTool === 'recolor' && shapeStart) {
+    pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+    curCtx.clearRect(0,0,cursorCanvas.width,cursorCanvas.height);
+    if(recolorMode==='box') applyRecolorBox(shapeStart.x,shapeStart.y,x,y);
+    else applyRecolorLasso(lassoPoints);
+    shapeStart=null; lassoPoints=[];
+  } else if (activeTool === 'line' && shapeStart) {
     pushUndo();
     drawLinePixels(shapeStart.x, shapeStart.y, x, y, activeWood);
     pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
@@ -1638,23 +1806,6 @@ document.addEventListener('keydown', e => {
 const workCanvas = document.getElementById('workCanvas');
 const wCtx = workCanvas.getContext('2d');
 
-// Convert sRGB (0-255) → CIE LAB for perceptual color matching
-function rgbToLab(r,g,b){
-  // sRGB → linear
-  let R=r/255, G=g/255, B=b/255;
-  R = R>0.04045 ? Math.pow((R+0.055)/1.055,2.4) : R/12.92;
-  G = G>0.04045 ? Math.pow((G+0.055)/1.055,2.4) : G/12.92;
-  B = B>0.04045 ? Math.pow((B+0.055)/1.055,2.4) : B/12.92;
-  // linear → XYZ (D65)
-  let X=(R*0.4124564+G*0.3575761+B*0.1804375)/0.95047;
-  let Y=(R*0.2126729+G*0.7151522+B*0.0721750)/1.00000;
-  let Z=(R*0.0193339+G*0.1191920+B*0.9503041)/1.08883;
-  // XYZ → Lab
-  const f=t=>t>0.008856?Math.pow(t,1/3):7.787*t+16/116;
-  const fx=f(X),fy=f(Y),fz=f(Z);
-  return [116*fy-16, 500*(fx-fy), 200*(fy-fz)];
-}
-
 // Pre-compute LAB values for all woods once
 let spookyMode = false;
 
@@ -1663,27 +1814,53 @@ function toggleSpookyMode() {
   const btn = document.getElementById('spookyToggleBtn');
   btn.textContent = spookyMode ? '✓ ON' : '✕ OFF';
   btn.className = 'dis-btn' + (spookyMode ? ' on' : '');
-  // Re-render image if one is loaded (manual pixels stay intact)
   if (srcPixels) reRenderFromSource();
 }
 
-const WOODS_LAB = {};
-for (const [n,[r,g,b]] of Object.entries(WOODS)) {
-  WOODS_LAB[n] = rgbToLab(r,g,b);
+// Color matching mode: 'rgb' or 'lab'
+let colorMatchMode = 'rgb';
+function toggleColorMode() {
+  colorMatchMode = colorMatchMode === 'rgb' ? 'lab' : 'rgb';
+  const btn = document.getElementById('colorModeBtn');
+  const desc = document.getElementById('colorModeDesc');
+  btn.textContent = colorMatchMode === 'rgb' ? 'RGB' : 'LAB';
+  btn.className = colorMatchMode === 'lab' ? 'dis-btn on' : 'dis-btn';
+  desc.textContent = colorMatchMode === 'rgb' ? 'Simple RGB distance' : 'Perceptual LAB (more accurate)';
+  if (srcPixels) reRenderFromSource();
 }
 
+function rgbToLab(r,g,b){
+  let R=r/255,G=g/255,B=b/255;
+  R=R>0.04045?Math.pow((R+0.055)/1.055,2.4):R/12.92;
+  G=G>0.04045?Math.pow((G+0.055)/1.055,2.4):G/12.92;
+  B=B>0.04045?Math.pow((B+0.055)/1.055,2.4):B/12.92;
+  let X=(R*0.4124564+G*0.3575761+B*0.1804375)/0.95047;
+  let Y=(R*0.2126729+G*0.7151522+B*0.0721750)/1.00000;
+  let Z=(R*0.0193339+G*0.1191920+B*0.9503041)/1.08883;
+  const f=t=>t>0.008856?Math.pow(t,1/3):7.787*t+16/116;
+  const fx=f(X),fy=f(Y),fz=f(Z);
+  return [116*fy-16,500*(fx-fy),200*(fy-fz)];
+}
+const WOODS_LAB={};
+for(const[n,[r,g,b]] of Object.entries(WOODS)) WOODS_LAB[n]=rgbToLab(r,g,b);
+
 function closestWood(r,g,b) {
-  const [L,A,B] = rgbToLab(r,g,b);
   let best=null,bd=Infinity;
-  for (const [n,[wL,wA,wB]] of Object.entries(WOODS_LAB)) {
-    if (disabledWoods.has(n)) continue;
-    const d=(L-wL)**2+(A-wA)**2+(B-wB)**2;
-    if(d<bd){bd=d;best=n}
-  }
-  // Spooky mode: if the pixel is very dark (LAB lightness < 30) and best is Walnut,
-  // swap to Spooky. Walnut still wins for mid-dark browns — only pure blacks get Spooky.
-  if (spookyMode && best === 'Walnut' && L < 30 && !disabledWoods.has('Spooky')) {
-    best = 'Spooky';
+  if (colorMatchMode === 'lab') {
+    const [L,A,B] = rgbToLab(r,g,b);
+    for (const [n,[wL,wA,wB]] of Object.entries(WOODS_LAB)) {
+      if (disabledWoods.has(n)) continue;
+      const d=(L-wL)**2+(A-wA)**2+(B-wB)**2;
+      if(d<bd){bd=d;best=n}
+    }
+    if (spookyMode && best==='Walnut' && L<30 && !disabledWoods.has('Spooky')) best='Spooky';
+  } else {
+    for (const [n,[wr,wg,wb]] of Object.entries(WOODS)) {
+      if (disabledWoods.has(n)) continue;
+      const d=(r-wr)**2+(g-wg)**2+(b-wb)**2;
+      if(d<bd){bd=d;best=n}
+    }
+    if (spookyMode && best==='Walnut' && r<60&&g<60&&b<60 && !disabledWoods.has('Spooky')) best='Spooky';
   }
   return best;
 }
@@ -2076,71 +2253,17 @@ function getSkip(){
 // PIECE PACKING
 // ═══════════════════════════════════════════════════════════════
 function packPixels(grid, w, h) {
-  const placed=[], covered=new Uint8Array(w*h);
-  const bd={Floor1Large:0,Floor1:0,Floor1Small:0,Floor1Tiny:0,Post:0};
-
-  // Pass 1: square pieces only — greedy, largest first
-  const SQ = [
-    {name:'Floor1Large', pw:4, ph:4},
-    {name:'Floor1',      pw:3, ph:3},
-    {name:'Floor1Small', pw:2, ph:2},
-    {name:'Floor1Tiny',  pw:1, ph:1},
-  ];
+  // No optimization — one Floor1Tiny per pixel
+  const placed=[];
+  const bd={Floor1Large:0,Floor1:0,Floor1Small:0,Floor1Tiny:0};
   for(let y=0;y<h;y++){
     for(let x=0;x<w;x++){
-      if(covered[y*w+x]) continue;
       const wood=grid[y*w+x];
       if(!wood) continue;
-      for(const{name,pw,ph}of SQ){
-        if(x+pw>w||y+ph>h) continue;
-        let ok=true;
-        for(let dy=0;dy<ph&&ok;dy++)
-          for(let dx=0;dx<pw&&ok;dx++){
-            const idx=(y+dy)*w+(x+dx);
-            if(covered[idx]||grid[idx]!==wood) ok=false;
-          }
-        if(ok){
-          for(let dy=0;dy<ph;dy++)
-            for(let dx=0;dx<pw;dx++) covered[(y+dy)*w+(x+dx)]=1;
-          placed.push({x,y,wood,piece:name,pw,ph});
-          bd[name]++;
-          break;
-        }
-      }
+      placed.push({x,y,wood,piece:'Floor1Tiny',pw:1,ph:1});
+      bd.Floor1Tiny++;
     }
   }
-
-  // Pass 2: merge 4 consecutive Tiny pieces in the same column into a Post
-  // Build a lookup: (x,y) → index in placed[]
-  const tinyMap = new Map();
-  for(let i=0;i<placed.length;i++){
-    const p=placed[i];
-    if(p.piece==='Floor1Tiny') tinyMap.set(p.x+','+p.y, i);
-  }
-  const merged=new Set();
-  for(const[key,i] of tinyMap){
-    if(merged.has(i)) continue;
-    const p=placed[i];
-    // Look for a run of 4 downward
-    const run=[i];
-    for(let dy=1;dy<4;dy++){
-      const k=p.x+','+(p.y+dy);
-      const j=tinyMap.get(k);
-      if(j===undefined||merged.has(j)||placed[j].wood!==p.wood) break;
-      run.push(j);
-    }
-    if(run.length===4){
-      // Replace first, mark rest for removal
-      placed[run[0]]={x:p.x,y:p.y,wood:p.wood,piece:'Post',pw:1,ph:4};
-      bd.Floor1Tiny-=4;
-      bd.Post++;
-      for(let k=1;k<4;k++) merged.add(run[k]);
-    }
-  }
-  // Remove merged Tiny entries (in reverse order to keep indices stable)
-  const toRemove=[...merged].sort((a,b)=>b-a);
-  for(const i of toRemove) placed.splice(i,1);
-
   return{placed,bd};
 }
 
@@ -2168,25 +2291,31 @@ function doConvert(){
 
   const{placed,bd}=packPixels(grid,w,h);
 
+
+
   const L=[];
   L.push('-- LT2 Image Converter | AddBP Format');
   L.push('-- Canvas: '+w+'x'+h+' px  |  Parts: '+placed.length+'  |  Pixels: '+totalPx);
   L.push('-- Generated: '+new Date().toISOString());
-  L.push('-- Pieces: Large='+bd.Floor1Large+' | 3x3='+bd.Floor1+' | Small='+bd.Floor1Small+' | Tiny='+bd.Floor1Tiny+' | Post='+bd.Post);
+  L.push('-- Pieces: Large='+bd.Floor1Large+' | 3x3='+bd.Floor1+' | Small='+bd.Floor1Small+' | Tiny='+bd.Floor1Tiny);
+  L.push('-- Scale: '+scale);
   L.push('');
   L.push('local origin = CFrame.new('+originX+', '+yLevel+', '+originZ+')');
   L.push('');
 
   for(const{x,y,wood,piece,pw,ph}of placed){
-    const halfX=fmt((pw||PIECE_STUD[piece])*scale/2);
-    const halfY=fmt((ph||PIECE_STUD[piece])*scale/2);
-    const cx=fmt(x*scale+halfX);
-    const cy=fmt(y*scale+halfY);
+    // For square pieces: use PIECE_STUD (matches old site exactly)
+    // For Post (1x4): use pw for X half, ph for Z half
+    const isPost = piece === 'Post';
+    const halfX = fmt((isPost ? pw : PIECE_STUD[piece]) * scale / 2);
+    const halfZ = fmt((isPost ? ph : PIECE_STUD[piece]) * scale / 2);
+    const cx = fmt(x * scale + halfX);
+    const cy = fmt(y * scale + halfZ);
     let cf;
     if(plane==='xz'){
-      cf='origin*CFrame.Angles(-1.5707963705062866,0,0)+Vector3.new('+cx+',0,'+cy+')';
+      cf='CFrame.new('+fmt(originX+cx)+', '+yLevel+', '+fmt(originZ+cy)+')';
     } else {
-      const wallY=fmt((h-y)*scale-halfY);
+      const wallY = fmt((h - y) * scale - halfZ);
       cf='origin*CFrame.Angles(0,0,0)+Vector3.new('+cx+','+wallY+',0)';
     }
     L.push("AddBP('"+piece+"',"+cf+",'"+wood+"')");
@@ -2206,7 +2335,7 @@ function doConvert(){
     '<span class="bk m">Floor1 x'+bd.Floor1.toLocaleString()+'</span>'+
     '<span class="bk s">Floor1Small x'+bd.Floor1Small.toLocaleString()+'</span>'+
     '<span class="bk t">Floor1Tiny x'+bd.Floor1Tiny.toLocaleString()+'</span>'+
-    (bd.Post ? '<span class="bk t">Post x'+bd.Post.toLocaleString()+'</span>' : '');
+    '';
 }
 
 function copyLua(){
@@ -2324,6 +2453,35 @@ function importFromText(src) {
     const dims = getPieceDims(piece, angles);
     placed.push({ piece, cx, cy: cz, wood, pw: dims.w, ph: dims.h });
   }
+  // Detect wall-plane art (constant X): re-parse all 3 coords, use Y,Z as grid
+  {
+    const FLOOR_PIECES = new Set(['Floor1Large','Floor1','Floor1Small','Floor1Tiny']);
+    const _N3 = '([-\\d.]+)';
+    const reXZ3 = new RegExp(
+      `AddBP\\('([^']+)'${_S},${_S}(?:\\w+\\s*\\*\\s*)?CFrame\\.(?:Angles|new)\\(([^)]*)\\)${_S}[+*]${_S}Vector3\\.new\\(${_S}${_N3}${_S},${_S}${_N3}${_S},${_S}${_N3}${_S}\\)${_S},'([^']+)'\\)`, 'g'
+    );
+    const all3 = [];
+    while ((m = reXZ3.exec(normSrc)) !== null) {
+      all3.push({ piece: m[1], angles: m[2], vx: parseFloat(m[3]), vy: parseFloat(m[4]), vz: parseFloat(m[5]), wood: m[6] });
+    }
+    if (all3.length) {
+      const xVals = all3.map(p => Math.round(p.vx * 10));
+      const yVals = all3.map(p => Math.round(p.vy * 10));
+      const xConst = (new Set(xVals)).size === 1;
+      const yConst = (new Set(yVals)).size === 1;
+      if (xConst || yConst) {
+        // Wall-plane art: filter to floor pieces only, remap coords
+        placed.length = 0;
+        all3.forEach(p => {
+          if (!FLOOR_PIECES.has(p.piece)) return;
+          const dims = getPieceDims(p.piece, p.angles);
+          const cx = xConst ? p.vy : p.vx;
+          const cy = xConst ? p.vz : p.vz;
+          placed.push({ piece: p.piece, cx, cy, wood: p.wood, pw: dims.w, ph: dims.h });
+        });
+      }
+    }
+  }
   // Wall plane
   if (!placed.length) {
     const reWall = new RegExp(
@@ -2354,17 +2512,30 @@ function importFromText(src) {
     return;
   }
 
-  // Scale detection — only valid for canvas-relative Floor-based files
-  const tinyPieces = placed.filter(p => p.piece === 'Floor1Tiny');
+  // Scale detection — read from comment if available (most reliable)
   let detectedScale = 1;
-  if (tinyPieces.length) {
-    const minTinyCX = Math.min(...tinyPieces.map(p => p.cx).filter(v=>v>0));
-    detectedScale = Math.round(minTinyCX * 2) || 1;
+  const scaleCommentMatch = src.match(/--\s*Scale:\s*(\d+)/);
+  if (scaleCommentMatch) {
+    detectedScale = parseInt(scaleCommentMatch[1]) || 1;
   } else {
-    const squarePieces = placed.filter(p => PIECE_DIMS[p.piece] && PIECE_DIMS[p.piece].w === PIECE_DIMS[p.piece].h);
-    if (squarePieces.length) {
-      const sp = squarePieces.reduce((a,b) => (PIECE_STUD[a.piece]||1) < (PIECE_STUD[b.piece]||1) ? a : b);
-      detectedScale = Math.round((sp.cx * 2) / (PIECE_STUD[sp.piece] || 1)) || 1;
+    // Fallback: infer from Tiny pieces at origin — cx of a Tiny at gx=0 is scale/2
+    const tinyPieces = placed.filter(p => p.piece === 'Floor1Tiny');
+    if (tinyPieces.length) {
+      // Try each Tiny: scale = cx*2 / (2*gx+1) where gx>=0. gx=0 gives minimum.
+      // Use the minimum cx to get the Tiny closest to origin
+      const minCX = Math.min(...tinyPieces.map(p => p.cx).filter(v => v > 0));
+      detectedScale = Math.round(minCX * 2) || 1;
+    } else {
+      // Use smallest square piece closest to origin
+      const squarePieces = placed.filter(p => PIECE_DIMS[p.piece] && PIECE_DIMS[p.piece].w === PIECE_DIMS[p.piece].h);
+      if (squarePieces.length) {
+        // For a square piece of stud size s at gx=0: cx = s*scale/2, so scale = cx*2/s
+        // Sort by cx to find the one closest to origin
+        squarePieces.sort((a,b) => a.cx - b.cx);
+        const sp = squarePieces[0];
+        const s = PIECE_STUD[sp.piece] || 1;
+        detectedScale = Math.round((sp.cx * 2) / s) || 1;
+      }
     }
   }
   scale = detectedScale;
@@ -2461,6 +2632,20 @@ function importFromText(src) {
     '<span class="bk t">Floor1Tiny x'+ibd.Floor1Tiny+'</span>'+
     (ibd.Post ? '<span class="bk t">Post x'+ibd.Post+'</span>' : '');
 
+  // Store raw import lines for passthrough export
+  const rawLines = [];
+  const rawRe = /AddBP\('[^']+',.*,'[^']+'\)/g;
+  let rawM;
+  while((rawM = src.replace(/\bCea\b/g,'CFrame.Angles').replace(/\bVec\b/g,'Vector3.new').match(/AddBP\('[^']+',.*?'[^']*'\)/g)||[]).length) {
+    // use split approach
+    break;
+  }
+  // Use line-by-line parse (safe)
+  src.split('\n').forEach(line => {
+    const t = line.trim();
+    if (t.startsWith('AddBP(')) rawLines.push(t);
+  });
+  rawImportLines = rawLines.length ? rawLines : null;
   setImportStatus('✓ IMPORTED ' + placed.length + ' PARTS → ' + newW + 'x' + newH + ' CANVAS', 'lime');
   switchOutTab('generate');
   setTimeout(() => {
