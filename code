@@ -1,0 +1,2786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glo's LT2 Pixel Art Converter</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+:root{
+  --bg:#0a0f0a;
+  --surf:#111811;
+  --surf2:#162016;
+  --surf3:#1e2a1e;
+  --bord:#2a4a2a;
+  --bord2:#3a6a3a;
+  --lime:#b4ff32;
+  --lime2:#d4ff7a;
+  --lime3:#7acc00;
+  --limebg:rgba(180,255,50,.07);
+  --limebg2:rgba(180,255,50,.13);
+  --white:#f0fff0;
+  --offwhite:#c8e8c8;
+  --txt:#a8d8a8;
+  --txt2:#6aaa6a;
+  --mut:#3a5a3a;
+  --red:#ff3333;
+  --green:#33ff99;
+  --yellow:#ffee44;
+  --px:2px; /* pixel border width */
+}
+
+/* ── PIXEL FONT UTIL ── */
+.pf{font-family:'Press Start 2P',monospace}
+.vt{font-family:'VT323',monospace}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+
+/* Pixel-perfect: no subpixel antialiasing */
+*{-webkit-font-smoothing:none;font-smooth:never}
+
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:'VT323',monospace;
+  font-size:16px;
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;
+  padding:24px 12px 60px;
+  /* pixel grid scanline overlay */
+  background-image:
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.18) 3px,rgba(0,0,0,.18) 4px),
+    repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px),
+    radial-gradient(ellipse 70% 50% at 50% 0%,rgba(180,255,50,.06) 0%,transparent 65%);
+}
+
+/* ── PIXEL BORDER MIXIN (4-corner box shadow = pixel border) ── */
+.px-box{
+  border:var(--px) solid var(--bord);
+  image-rendering:pixelated;
+  position:relative;
+}
+/* pixel "raised" shadow effect */
+.px-raised{
+  border:2px solid;
+  border-color:var(--lime3) var(--mut) var(--mut) var(--lime3);
+  box-shadow:2px 2px 0 #000;
+}
+.px-sunken{
+  border:2px solid;
+  border-color:var(--mut) var(--lime3) var(--lime3) var(--mut);
+  box-shadow:inset 2px 2px 0 rgba(0,0,0,.4);
+}
+
+/* ── HEADER ── */
+header{text-align:center;margin-bottom:28px;position:relative}
+.header-inner{
+  display:inline-block;
+  background:var(--surf);
+  border:2px solid var(--lime3);
+  box-shadow:4px 4px 0 #000, 6px 6px 0 var(--lime3);
+  padding:16px 28px 12px;
+  position:relative;
+}
+/* pixel corner decorations */
+.header-inner::before,.header-inner::after{
+  content:'';position:absolute;width:8px;height:8px;background:var(--lime);
+}
+.header-inner::before{top:-2px;left:-2px}
+.header-inner::after{bottom:-2px;right:-2px}
+header h1{
+  font-family:'Press Start 2P',monospace;
+  font-size:1.15rem;
+  color:var(--white);
+  line-height:1.4;
+  text-shadow:3px 3px 0 #000, 2px 2px 0 var(--lime3);
+  letter-spacing:.02em;
+}
+header h1 .glo{color:var(--lime);text-shadow:3px 3px 0 #000,0 0 20px rgba(180,255,50,.6),2px 2px 0 var(--lime3)}
+header h1 .lt2{color:var(--lime2)}
+header p{
+  font-family:'VT323',monospace;font-size:1rem;
+  color:var(--txt2);margin-top:8px;letter-spacing:.05em;
+}
+.badge{display:inline-flex;gap:6px;margin-top:10px;flex-wrap:wrap;justify-content:center}
+.chip{
+  font-family:'Press Start 2P',monospace;font-size:.42rem;
+  background:var(--surf2);border:2px solid var(--bord2);
+  color:var(--txt2);padding:4px 7px;
+  box-shadow:2px 2px 0 #000;
+  letter-spacing:.04em;
+}
+.chip.o{background:var(--limebg2);border-color:var(--lime3);color:var(--lime)}
+.chip.p{background:rgba(51,255,153,.07);border-color:rgba(51,255,153,.4);color:var(--green)}
+
+/* ── LAYOUT ── */
+.workspace{width:100%;max-width:1120px;display:grid;grid-template-columns:230px 1fr 270px;gap:10px;align-items:start}
+
+/* ── PANELS ── */
+.panel{
+  background:var(--surf);
+  border:2px solid var(--bord2);
+  padding:14px;
+  position:relative;
+  overflow:hidden;
+  box-shadow:3px 3px 0 #000;
+}
+/* pixel corner accent */
+.panel::after{
+  content:'';position:absolute;
+  top:0;right:0;width:0;height:0;
+  border-style:solid;border-width:0 14px 14px 0;
+  border-color:transparent var(--lime3) transparent transparent;
+}
+.panel.o::after{border-color:transparent var(--lime3) transparent transparent}
+.panel.p::after{border-color:transparent var(--lime2) transparent transparent}
+
+/* top pixel stripe */
+.panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:repeating-linear-gradient(90deg,var(--lime) 0px,var(--lime) 4px,transparent 4px,transparent 8px);
+}
+.panel.o::before{background:repeating-linear-gradient(90deg,var(--lime3) 0px,var(--lime3) 4px,transparent 4px,transparent 8px)}
+.panel.p::before{background:repeating-linear-gradient(90deg,var(--lime2) 0px,var(--lime2) 4px,transparent 4px,transparent 8px)}
+
+.ptitle{
+  font-family:'Press Start 2P',monospace;
+  font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--lime);margin-bottom:12px;margin-top:4px;
+  display:flex;align-items:center;gap:6px;
+}
+.ptitle::before{
+  content:'▶';font-size:.45rem;color:var(--lime3);
+}
+.panel.o .ptitle{color:var(--lime2)}
+.panel.o .ptitle::before{color:var(--lime)}
+.panel.p .ptitle{color:var(--lime2)}
+
+/* ── UPLOAD ── */
+.upload-label{
+  display:block;
+  border:2px dashed var(--bord2);
+  padding:16px 10px;text-align:center;cursor:pointer;transition:all .15s;
+  background:var(--surf2);
+  font-family:'VT323',monospace;font-size:1.05rem;color:var(--mut);
+}
+.upload-label:hover,.upload-label.dov{
+  border-color:var(--lime);background:var(--limebg2);color:var(--lime);
+  box-shadow:inset 0 0 0 1px var(--lime3);
+}
+.upload-label input{display:none}
+#fileName{
+  font-family:'Press Start 2P',monospace;font-size:.45rem;
+  color:var(--lime);margin-top:5px;word-break:break-all;line-height:1.6;
+}
+
+/* ── TOOL BUTTONS ── */
+.tool-group{margin-bottom:11px}
+.tg-label{
+  font-family:'Press Start 2P',monospace;font-size:.42rem;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--mut);
+  margin-bottom:6px;
+}
+.tool-row{display:flex;gap:4px;flex-wrap:wrap}
+.tbtn{
+  background:var(--surf2);
+  border:2px solid var(--bord2);
+  color:var(--txt2);
+  padding:5px 9px;
+  font-family:'Press Start 2P',monospace;font-size:.52rem;
+  cursor:pointer;
+  transition:all .1s;
+  display:flex;align-items:center;gap:4px;white-space:nowrap;
+  box-shadow:2px 2px 0 #000;
+  line-height:1.4;
+}
+.tbtn:hover{
+  border-color:var(--lime);color:var(--lime);
+  background:var(--limebg2);
+  box-shadow:2px 2px 0 var(--lime3);
+  transform:translate(-1px,-1px);
+}
+.tbtn.active{
+  border-color:var(--lime);color:var(--bg);
+  background:var(--lime);
+  box-shadow:2px 2px 0 var(--lime3);
+  text-shadow:none;
+}
+.tbtn.active:hover{background:var(--lime2);transform:translate(-1px,-1px)}
+.tbtn.danger{border-color:#6a2222;color:var(--red)}
+.tbtn.danger:hover{background:rgba(255,51,51,.1);border-color:var(--red);box-shadow:2px 2px 0 #880000;transform:translate(-1px,-1px)}
+.tbtn.safe{border-color:var(--bord2);color:var(--lime3)}
+.tbtn.safe:hover{background:var(--limebg2);border-color:var(--lime);transform:translate(-1px,-1px)}
+
+/* ── SLIDER ── */
+.slider-row{display:flex;align-items:center;gap:5px;margin-top:4px}
+.slider-row input[type=range]{
+  flex:1;accent-color:var(--lime);height:6px;cursor:pointer;
+  background:var(--surf3);min-width:0;width:0;
+}
+.slider-val{
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;
+  color:var(--lime);width:28px;min-width:28px;max-width:28px;text-align:right;
+  background:transparent;border:none;border-bottom:1px solid var(--bord2);
+  padding:0 2px;outline:none;-moz-appearance:textfield;flex-shrink:0;
+}
+.slider-val::-webkit-inner-spin-button,.slider-val::-webkit-outer-spin-button{-webkit-appearance:none}
+
+/* ── WOOD PALETTE ── */
+.wood-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-top:4px}
+.wswatch{
+  width:100%;aspect-ratio:1;
+  border:2px solid rgba(180,255,50,.1);
+  position:relative;cursor:pointer;transition:all .1s;
+  image-rendering:pixelated;
+  box-shadow:1px 1px 0 #000;
+}
+.wswatch:hover{
+  border-color:var(--white);z-index:5;
+  box-shadow:0 0 0 1px var(--lime),2px 2px 0 #000;
+  transform:scale(1.12);
+}
+.wswatch.sel{
+  border-color:var(--lime);
+  box-shadow:0 0 0 2px var(--lime),2px 2px 0 #000;
+}
+.wswatch.dis{opacity:.15;filter:grayscale(100%)}
+.wswatch:hover::before{
+  content:attr(data-name);
+  position:absolute;bottom:calc(100%+5px);left:50%;transform:translateX(-50%);
+  background:var(--bg);color:var(--lime);
+  font-family:'Press Start 2P',monospace;font-size:.4rem;
+  padding:3px 7px;white-space:nowrap;
+  border:2px solid var(--lime3);z-index:20;pointer-events:none;
+  box-shadow:2px 2px 0 #000;line-height:1.6;
+}
+.cur-wood{
+  display:flex;align-items:center;gap:8px;margin-bottom:10px;
+  padding:7px 8px;background:var(--surf2);
+  border:2px solid var(--bord2);
+  box-shadow:inset 1px 1px 0 rgba(180,255,50,.08);
+}
+.cur-wood-swatch{
+  width:28px;height:28px;border:2px solid var(--lime3);
+  flex-shrink:0;image-rendering:pixelated;
+  box-shadow:2px 2px 0 #000;
+}
+.cur-wood-name{font-family:'Press Start 2P',monospace;font-size:.5rem;color:var(--lime);line-height:1.5}
+.cur-wood-sub{font-family:'VT323',monospace;font-size:.85rem;color:var(--mut)}
+
+/* ── CANVAS ── */
+.canvas-toolbar{display:flex;gap:5px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.canvas-outer{
+  background:#050a05;
+  border:2px solid var(--bord2);
+  overflow:auto;position:relative;display:inline-block;
+  cursor:crosshair;
+  box-shadow:inset 0 0 30px rgba(0,0,0,.6),3px 3px 0 #000;
+}
+.canvas-outer.brush-cur{cursor:none}
+#editCanvas{display:block;image-rendering:pixelated}
+#cursorOverlay{position:absolute;top:0;left:0;pointer-events:none;image-rendering:pixelated}
+.coord-bar{
+  font-family:'Press Start 2P',monospace;font-size:.38rem;
+  color:var(--mut);margin-top:5px;height:14px;letter-spacing:.05em;
+}
+
+/* ── FIELDS ── */
+.field{margin-bottom:9px}
+.field label{
+  display:block;font-family:'Press Start 2P',monospace;
+  font-size:.42rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--txt2);margin-bottom:5px;
+}
+.field input,.field select{
+  width:100%;background:var(--surf2);
+  border:2px solid var(--bord2);
+  color:var(--lime2);
+  padding:6px 8px;
+  font-family:'VT323',monospace;font-size:1rem;
+  outline:none;transition:border-color .1s;
+  -webkit-appearance:none;
+  box-shadow:inset 1px 1px 0 rgba(0,0,0,.4);
+}
+.field input:focus,.field select:focus{
+  border-color:var(--lime);
+  box-shadow:inset 1px 1px 0 rgba(0,0,0,.4),0 0 0 1px var(--lime3);
+}
+.field select option{background:var(--surf2);color:var(--lime2)}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+
+/* ── GENERATE BUTTON ── */
+.gen-btn{
+  width:100%;padding:11px 10px;
+  background:var(--lime);
+  border:2px solid var(--lime3);
+  color:var(--bg);
+  font-family:'Press Start 2P',monospace;font-size:.6rem;
+  letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;
+  transition:all .1s;
+  box-shadow:3px 3px 0 #000,3px 3px 0 var(--lime3);
+  position:relative;overflow:hidden;
+}
+.gen-btn:hover:not(:disabled){
+  background:var(--lime2);
+  transform:translate(-2px,-2px);
+  box-shadow:5px 5px 0 #000;
+}
+.gen-btn:active:not(:disabled){
+  transform:translate(1px,1px);
+  box-shadow:1px 1px 0 #000;
+}
+.gen-btn:disabled{opacity:.3;cursor:not-allowed;transform:none}
+
+/* ── OUTPUT ── */
+.out-area{width:100%;max-width:1120px;margin-top:10px}
+.out-panel{
+  background:var(--surf);border:2px solid var(--bord2);
+  padding:14px;position:relative;overflow:hidden;
+  box-shadow:3px 3px 0 #000;
+}
+.out-panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:repeating-linear-gradient(90deg,var(--lime) 0px,var(--lime) 4px,transparent 4px,transparent 8px);
+}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.stat{
+  background:var(--surf2);border:2px solid var(--bord2);
+  padding:7px 10px;min-width:72px;
+  box-shadow:2px 2px 0 #000;
+}
+.stat .v{
+  color:var(--lime);font-size:.75rem;font-weight:700;display:block;
+  font-family:'Press Start 2P',monospace;line-height:1;
+}
+.stat.o .v{color:var(--lime2)}
+.stat.g .v{color:var(--green)}
+.stat.p .v{color:var(--yellow)}
+.stat .l{
+  color:var(--mut);font-family:'VT323',monospace;
+  font-size:.8rem;margin-top:4px;display:block;
+  letter-spacing:.04em;text-transform:uppercase;
+}
+.breakdown{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.bk{
+  font-family:'Press Start 2P',monospace;font-size:.38rem;
+  padding:3px 7px;border:2px solid;
+  box-shadow:2px 2px 0 #000;line-height:1.6;
+}
+.bk.l{color:var(--lime);border-color:var(--lime3);background:var(--limebg)}
+.bk.m{color:var(--lime2);border-color:var(--bord2);background:var(--surf2)}
+.bk.s{color:var(--yellow);border-color:rgba(255,238,68,.3);background:rgba(255,238,68,.06)}
+.bk.t{color:var(--green);border-color:rgba(51,255,153,.3);background:rgba(51,255,153,.06)}
+.code-box{
+  background:#020602;border:2px solid var(--bord2);
+  padding:10px;font-family:'VT323',monospace;font-size:1rem;
+  color:#7ddc5a;min-height:120px;max-height:220px;
+  overflow-y:auto;white-space:pre;line-height:1.5;
+  box-shadow:inset 2px 2px 0 rgba(0,0,0,.5);
+  /* crt scanlines on code box */
+  background-image:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15) 2px,rgba(0,0,0,.15) 3px);
+}
+.code-box::-webkit-scrollbar{width:6px}
+.code-box::-webkit-scrollbar-track{background:var(--surf2)}
+.code-box::-webkit-scrollbar-thumb{background:var(--lime3);border:1px solid #000}
+.act-row{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+.abtn{
+  background:var(--surf2);
+  border:2px solid var(--bord2);
+  color:var(--lime2);
+  padding:7px 14px;
+  font-family:'Press Start 2P',monospace;font-size:.45rem;
+  letter-spacing:.04em;text-transform:uppercase;
+  cursor:pointer;
+  box-shadow:2px 2px 0 #000;
+  transition:all .1s;line-height:1.5;
+}
+.abtn:hover{
+  border-color:var(--lime);color:var(--lime);background:var(--limebg2);
+  transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000;
+}
+.abtn.ok{
+  background:var(--lime);border-color:var(--lime3);
+  color:var(--bg);box-shadow:2px 2px 0 var(--lime3);
+}
+.abtn.ok:hover{background:var(--lime2);transform:translate(-1px,-1px)}
+.abtn.pb{border-color:rgba(51,255,153,.5);color:var(--green)}
+.abtn.pb:hover{background:rgba(51,255,153,.1);border-color:var(--green);transform:translate(-1px,-1px)}
+
+/* ── PIECE INFO ── */
+.pinfo{
+  background:var(--surf2);border:2px solid var(--bord2);
+  padding:8px;margin-bottom:9px;
+  font-family:'VT323',monospace;font-size:.9rem;color:var(--txt2);
+  box-shadow:inset 1px 1px 0 rgba(0,0,0,.3);
+}
+.pi-chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.pic{
+  background:var(--limebg);border:2px solid var(--bord2);
+  color:var(--lime);padding:2px 6px;
+  font-family:'Press Start 2P',monospace;font-size:.38rem;
+  box-shadow:1px 1px 0 #000;line-height:1.6;
+}
+
+/* ── DISABLE ROWS ── */
+.dis-row{
+  display:flex;align-items:center;gap:6px;
+  padding:3px 5px;transition:background .1s;cursor:default;
+}
+.dis-row:hover{background:var(--surf2)}
+.dis-dot{
+  width:13px;height:13px;flex-shrink:0;
+  border:2px solid rgba(255,255,255,.12);
+  box-shadow:1px 1px 0 #000;
+  image-rendering:pixelated;
+}
+.dis-name{
+  font-family:'VT323',monospace;font-size:.9rem;
+  flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt2);
+}
+.dis-name.off{color:var(--mut);text-decoration:line-through}
+.dis-btn{
+  background:var(--surf2);border:2px solid var(--bord2);
+  color:var(--txt2);font-family:'Press Start 2P',monospace;
+  font-size:.38rem;padding:2px 6px;
+  cursor:pointer;transition:all .1s;flex-shrink:0;line-height:1.6;
+  box-shadow:1px 1px 0 #000;
+}
+.dis-btn:hover{border-color:var(--red);color:var(--red);background:rgba(255,51,51,.08);transform:translate(-1px,-1px);box-shadow:2px 2px 0 #000}
+.dis-btn.on{border-color:var(--lime3);color:var(--lime);background:var(--limebg)}
+.dis-btn.on:hover{border-color:var(--red);color:var(--red);background:rgba(255,51,51,.08)}
+
+/* ── SCROLLBARS ── */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--surf2);border:1px solid var(--bord)}
+::-webkit-scrollbar-thumb{background:var(--lime3);border:1px solid #000}
+::-webkit-scrollbar-corner{background:var(--surf2)}
+
+/* hide util canvases */
+#workCanvas,#origCanvas{display:none}
+
+/* ── PROC BLOCKS ── */
+.proc-block{
+  border:2px solid var(--bord2);margin-bottom:5px;
+  background:var(--surf2);box-shadow:2px 2px 0 #000;
+}
+.proc-header{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 8px;cursor:pointer;
+  transition:background .1s;
+  user-select:none;
+}
+.proc-header:hover{background:var(--limebg2)}
+.proc-toggle{
+  font-family:'Press Start 2P',monospace;font-size:.4rem;
+  color:var(--lime3);transition:transform .15s;flex-shrink:0;
+}
+.proc-toggle.open{transform:rotate(90deg)}
+.proc-title{
+  font-family:'Press Start 2P',monospace;font-size:.42rem;
+  color:var(--lime2);flex:1;letter-spacing:.04em;
+}
+.proc-badge{
+  font-family:'Press Start 2P',monospace;font-size:.35rem;
+  padding:2px 5px;border:2px solid;box-shadow:1px 1px 0 #000;
+  flex-shrink:0;
+}
+.proc-badge.good{color:var(--lime);border-color:var(--lime3);background:var(--limebg)}
+.proc-badge.ok{color:var(--yellow);border-color:rgba(255,238,68,.4);background:rgba(255,238,68,.06)}
+.proc-badge.warn{color:var(--green);border-color:rgba(51,255,153,.4);background:rgba(51,255,153,.06)}
+.proc-desc{
+  font-family:'VT323',monospace;font-size:.85rem;
+  color:var(--mut);padding:0 8px 6px;line-height:1.45;
+}
+.proc-body{padding:6px 8px 8px;border-top:1px solid var(--bord)}
+
+/* ── OUTPUT TABS ── */
+.out-tabs{display:flex;gap:0;border-bottom:2px solid var(--bord2);margin-bottom:0}
+.out-tab{
+  background:var(--surf2);border:2px solid var(--bord2);border-bottom:none;
+  color:var(--txt2);padding:7px 14px;
+  font-family:'Press Start 2P',monospace;font-size:.42rem;letter-spacing:.05em;
+  cursor:pointer;transition:all .1s;margin-right:3px;margin-bottom:-2px;
+  box-shadow:2px -2px 0 #000;
+}
+.out-tab:hover{color:var(--lime);background:var(--limebg2)}
+.out-tab.active{
+  background:var(--surf);border-color:var(--lime3);color:var(--lime);
+  box-shadow:2px -2px 0 var(--lime3);
+}
+
+@media(max-width:900px){.workspace{grid-template-columns:1fr 1fr}.workspace>.panel:first-child{grid-column:1/-1}}
+@media(max-width:580px){.workspace{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <h1><span class="glo">GLO'S</span> <span class="lt2">LT2</span><br>PIXEL ART CONVERTER</h1>
+    <p>▸ Pixel Editor + AddBP Lua Generator for Lumber Tycoon 2</p>
+    <div class="badge">
+      <span class="chip">ADDBP FORMAT</span>
+      <span class="chip o">BRUSH + FILL TOOLS</span>
+      <span class="chip p">SMART PACKING</span>
+    </div>
+  </div>
+</header>
+
+<div class="workspace">
+  <!-- ── LEFT: Tools + Wood Palette ── -->
+  <div class="panel">
+    <div class="ptitle">TOOLS</div>
+
+    <!-- Upload -->
+    <label class="upload-label" id="dropZone">
+      <input type="file" id="fileInput" accept="image/*">
+      &#128444; Browse / Drop Image
+      <div id="fileName"></div>
+    </label>
+
+    <div style="height:10px"></div>
+
+    <!-- Tool selector -->
+    <div class="tool-group">
+      <div class="tg-label">Active Tool</div>
+      <div class="tool-row">
+        <button class="tbtn active" id="btnBrush" onclick="setTool('brush')">&#9998; Brush</button>
+        <button class="tbtn" id="btnFill" onclick="setTool('fill')">&#9724; Fill</button>
+        <button class="tbtn" id="btnErase" onclick="setTool('erase')">&#9003; Erase</button>
+        <button class="tbtn" id="btnFillErase" onclick="setTool('fill-erase')">&#9003; Fill Erase</button>
+        <button class="tbtn" id="btnLine" onclick="setTool('line')">&#9135; Line</button>
+        <button class="tbtn" id="btnEyedrop" onclick="setTool('eyedrop')">&#128065; Pick</button>
+      </div>
+      <div class="tool-row" style="margin-top:4px">
+        <button class="tbtn" id="btnRecolor" onclick="setTool('recolor')">&#11036; Recolor</button>
+      </div>
+    </div>
+
+    <!-- Brush size -->
+    <div class="tool-group" id="brushSizeGroup">
+      <div class="tg-label">Brush Size</div>
+      <div class="slider-row">
+        <input type="range" id="brushSize" min="1" max="12" value="1">
+        <input type="number" class="slider-val" id="brushSizeVal" value="1" min="1" max="12">
+      </div>
+    </div>
+
+    <!-- Shape tool -->
+    <div class="tool-group" id="shapeToolGroup" style="display:none">
+      <div class="tg-label">Shape</div>
+      <div class="tool-row">
+        <button class="tbtn active" id="shapeRect" onclick="setShape('rect')">&#9635; Rect</button>
+        <button class="tbtn" id="shapeCircle" onclick="setShape('circle')">&#9711; Circle</button>
+        <button class="tbtn" id="shapeText" onclick="setShape('text')">T Text</button>
+      </div>
+      <div class="tool-row" style="margin-top:4px">
+        <button class="tbtn active" id="shapeHollow" onclick="setShapeFill(false)">Hollow</button>
+        <button class="tbtn" id="shapeFilled" onclick="setShapeFill(true)">Filled</button>
+      </div>
+      <div id="shapeTextInput" style="display:none;margin-top:4px">
+        <input type="text" id="shapeTextVal" placeholder="Hello World" maxlength="32"
+          style="width:100%;box-sizing:border-box;font-family:'Share Tech Mono',monospace;font-size:.75rem;
+                 background:var(--surf2);border:2px solid var(--bord2);color:var(--txt);padding:4px 6px;outline:none">
+        <div class="tool-row" style="margin-top:4px">
+          <button class="tbtn active" id="textSm" onclick="setTextSize(1)">1x</button>
+          <button class="tbtn" id="textMd" onclick="setTextSize(2)">2x</button>
+          <button class="tbtn" id="textLg" onclick="setTextSize(3)">3x</button>
+        </div>
+      </div>
+    </div>
+    <!-- Recolor tool panel -->
+    <div class="tool-group" id="recolorToolGroup" style="display:none">
+      <div class="tg-label">Recolor</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        <div style="flex:1">
+          <div style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--mut);margin-bottom:3px">FROM</div>
+          <div style="display:flex;align-items:center;gap:4px;cursor:pointer" onclick="pickRecolorFrom()">
+            <div id="recolorFromSwatch" style="width:14px;height:14px;border:2px solid var(--bord2);background:#666;flex-shrink:0"></div>
+            <span style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--lime)" id="recolorFromName">click to pick</span>
+          </div>
+        </div>
+        <div style="font-family:'VT323',monospace;font-size:1.2rem;color:var(--mut)">→</div>
+        <div style="flex:1">
+          <div style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--mut);margin-bottom:3px">TO</div>
+          <div style="display:flex;align-items:center;gap:4px;cursor:pointer" onclick="pickRecolorTo()">
+            <div id="recolorToSwatch" style="width:14px;height:14px;border:2px solid var(--bord2);background:#888;flex-shrink:0"></div>
+            <span style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--lime)" id="recolorToName">click to pick</span>
+          </div>
+        </div>
+      </div>
+      <div class="tool-row" style="margin-bottom:5px">
+        <button class="tbtn active" id="recolorModeBox" onclick="setRecolorMode('box')">&#9645; Box</button>
+        <button class="tbtn" id="recolorModeLasso" onclick="setRecolorMode('lasso')">&#9099; Lasso</button>
+      </div>
+      <div style="font-family:'VT323',monospace;font-size:.8rem;color:var(--mut);line-height:1.4">
+        Drag to select. Only FROM color pixels are replaced.
+      </div>
+    </div>
+    <div class="tool-group">
+      <div class="tg-label">Shape Tool</div>
+      <div class="tool-row">
+        <button class="tbtn" id="btnShape" onclick="setTool('shape')">&#9643; Shape / Text</button>
+      </div>
+    </div>
+    <!-- Mirror mode -->
+    <div class="tool-group">
+      <div class="tg-label">Mirror</div>
+      <div class="tool-row">
+        <button class="tbtn" id="btnMirrorH" onclick="toggleMirror('h')">&#8596; Horizontal</button>
+        <button class="tbtn" id="btnMirrorV" onclick="toggleMirror('v')">&#8597; Vertical</button>
+      </div>
+    </div>
+    <!-- Undo/Redo -->
+    <div class="tool-group">
+      <div class="tg-label">History</div>
+      <div class="tool-row">
+        <button class="tbtn" id="btnUndo" onclick="undo()">&#8630; Undo</button>
+        <button class="tbtn" id="btnRedo" onclick="redo()">&#8631; Redo</button>
+        <button class="tbtn danger" onclick="clearCanvas()">&#128465; Clear</button>
+      </div>
+    </div>
+
+    <!-- Fill empty -->
+    <div class="tool-group">
+      <div class="tg-label">Smart Fill</div>
+      <button class="tbtn safe" style="width:100%;justify-content:center" onclick="fillEmptyNearest()">&#9719; Fill Gaps (Nearest Color)</button>
+      <div style="font-family:'VT323',monospace;font-size:.8rem;color:var(--mut);margin-top:4px;line-height:1.4">
+        Fills all transparent/empty pixels with the color of their nearest filled neighbor.
+      </div>
+    </div>
+
+    <!-- Auto Outline -->
+    <div class="tool-group">
+      <div class="tg-label">Auto Outline</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <div id="outlineSwatchDisplay" style="width:18px;height:18px;border:2px solid var(--bord2);background:#aa5500;flex-shrink:0;cursor:pointer" onclick="cycleOutlineWood()" title="Click to cycle wood"></div>
+        <span style="font-family:'Press Start 2P',monospace;font-size:.42rem;color:var(--lime)" id="outlineWoodName">Walnut</span>
+      </div>
+      <div class="tool-row">
+        <button class="tbtn safe" style="flex:1;justify-content:center" onclick="applyOutline()">&#9645; Add Outline</button>
+        <button class="tbtn danger" style="justify-content:center" onclick="removeOutline()" title="Remove outline pixels (only pixels added by outline tool)">&#10005; Remove</button>
+      </div>
+      <div style="font-family:'VT323',monospace;font-size:.8rem;color:var(--mut);margin-top:4px;line-height:1.4">
+        Adds a 1px border around all filled regions. Remove undoes the last outline applied.
+      </div>
+    </div>
+
+    <!-- Grid toggle -->
+    <div class="tool-group">
+      <div class="tg-label">View</div>
+      <div class="tool-row">
+        <button class="tbtn" id="btnGrid" onclick="toggleGrid()">&#9783; Grid</button>
+        <button class="tbtn" onclick="zoomIn()">+ Zoom</button>
+        <button class="tbtn" onclick="zoomOut()">&minus; Zoom</button>
+        <button class="tbtn" onclick="zoomReset()">1:1</button>
+      </div>
+    </div>
+
+    <div style="height:10px"></div>
+    <div class="ptitle">WOOD COLOR</div>
+
+    <!-- Current wood -->
+    <div class="cur-wood" id="curWoodDisplay">
+      <div class="cur-wood-swatch" id="curWoodSwatch"></div>
+      <div>
+        <div class="cur-wood-name" id="curWoodName">Generic</div>
+        <div class="cur-wood-sub">active wood</div>
+      </div>
+    </div>
+
+    <!-- Wood swatches (paint selector) -->
+    <div class="wood-grid" id="woodGrid"></div>
+
+    <div style="height:10px"></div>
+    <div class="ptitle">COLOR MAPPING OPTIONS</div>
+    <div class="dis-row" style="padding:5px 4px;background:var(--surf2);border:2px solid var(--bord2);margin-bottom:8px;cursor:pointer" onclick="toggleSpookyMode()" id="spookyToggleRow">
+      <div class="dis-dot" style="background:rgb(27,16,12)"></div>
+      <div style="flex:1">
+        <div style="font-family:'Press Start 2P',monospace;font-size:.42rem;color:var(--lime2)">Spooky over Walnut</div>
+        <div style="font-family:'VT323',monospace;font-size:.78rem;color:var(--mut);line-height:1.3">Use Spooky for dark/black pixels instead of Walnut</div>
+      </div>
+      <button class="dis-btn on" id="spookyToggleBtn">✕ OFF</button>
+    </div>
+    <div class="dis-row" style="padding:5px 4px;background:var(--surf2);border:2px solid var(--bord2);margin-bottom:8px;cursor:pointer" onclick="toggleColorMode()" id="colorModeRow">
+      <div style="flex:1">
+        <div style="font-family:'Press Start 2P',monospace;font-size:.42rem;color:var(--lime2)">Color Matching</div>
+        <div style="font-family:'VT323',monospace;font-size:.78rem;color:var(--mut);line-height:1.3" id="colorModeDesc">Simple RGB distance</div>
+      </div>
+      <button class="dis-btn" id="colorModeBtn">RGB</button>
+    </div>
+
+    <div style="height:4px"></div>
+    <div class="ptitle">EXCLUDE FROM CONVERT</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:.52rem;color:var(--mut);margin-bottom:7px;line-height:1.5">
+      Click [OFF] to exclude a wood from Lua output. Skipped on Generate.
+    </div>
+    <!-- Disable toggles - one row per wood -->
+    <div id="disableGrid" style="display:flex;flex-direction:column;gap:3px"></div>
+  </div>
+
+  <!-- ── CENTER: Canvas ── -->
+  <div class="panel" style="padding:12px">
+    <div class="ptitle">PIXEL EDITOR</div>
+    <div class="canvas-toolbar">
+      <span style="font-family:'Press Start 2P',monospace;font-size:.42rem;color:var(--txt2)" id="zoomLabel">ZOOM: 1x</span>
+      <button class="tbtn safe" onclick="newBlankCanvas()">&#10010; New Canvas</button>
+      <span style="margin-left:auto;font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--mut)" id="canvasSizeLabel"></span>
+    </div>
+    <div style="display:flex;justify-content:center;align-items:flex-start">
+    <div class="canvas-outer" id="canvasOuter">
+      <canvas id="editCanvas"></canvas>
+      <canvas id="previewCanvas"></canvas>
+      <canvas id="cursorOverlay"></canvas>
+    </div>
+    </div>
+    <div class="coord-bar" id="coordBar"></div>
+  </div>
+
+  <!-- ── RIGHT: Settings + Generate ── -->
+  <div class="panel o">
+    <div class="ptitle">CONVERT SETTINGS</div>
+
+    <div class="fr2">
+      <div class="field"><label>Origin X</label><input type="number" id="originX" value="0"></div>
+      <div class="field"><label>Origin Z</label><input type="number" id="originZ" value="0"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>Y Level</label><input type="number" id="yLevel" value="10"></div>
+      <div class="field"><label>Scale (studs/px)</label><input type="number" id="scale" value="1" min="1" max="10"></div>
+    </div>
+    <div class="field">
+      <label>Image Quality</label>
+      <div class="tool-row" style="margin-top:2px">
+        <button class="tbtn" id="qLow"    onclick="setQuality('low')">LOW<br><span style="font-size:.35rem;opacity:.7">~48px</span></button>
+        <button class="tbtn active" id="qMed"  onclick="setQuality('med')">MED<br><span style="font-size:.35rem;opacity:.7">~96px</span></button>
+        <button class="tbtn" id="qHigh"   onclick="setQuality('high')">HIGH<br><span style="font-size:.35rem;opacity:.7">~200px</span></button>
+        <button class="tbtn" id="qCustom" onclick="setQuality('custom')">CUSTOM<br><span style="font-size:.35rem;opacity:.7">W×H</span></button>
+        <button class="tbtn" id="qPixel"  onclick="setQuality('pixel')" style="border-color:rgba(255,238,68,.4);color:var(--yellow)">PIXEL<br><span style="font-size:.35rem;opacity:.7">1:1</span></button>
+        <button class="tbtn" id="qDivine" onclick="setQuality('divine')" style="border-color:rgba(180,100,255,.5);color:#d48fff">DIVINE<br><span style="font-size:.35rem;opacity:.7">200×500</span></button>
+      </div>
+      <!-- Preset max-edge row (hidden in custom mode) -->
+      <div id="maxSizeRow" style="margin-top:6px;display:flex;align-items:center;gap:6px">
+        <span style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--mut)">MAX EDGE:</span>
+        <input type="number" id="maxSize" value="96" min="10" max="200"
+          style="width:56px;background:var(--surf2);border:2px solid var(--bord2);color:var(--lime2);
+                 font-family:'Share Tech Mono',monospace;font-size:.85rem;padding:3px 6px;outline:none">
+        <span style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--mut)">PX</span>
+      </div>
+      <!-- Custom W×H row (shown in custom mode) -->
+      <div id="customSizeRow" style="display:none;margin-top:6px">
+        <div style="font-family:'Press Start 2P',monospace;font-size:.38rem;color:var(--mut);margin-bottom:5px">CANVAS SIZE (px)</div>
+        <div class="fr2">
+          <div class="field" style="margin-bottom:0">
+            <label>Width <span style="color:var(--red);font-size:.35rem">MAX 200</span></label>
+            <input type="number" id="customW" value="200" min="4" max="200" oninput="if(srcPixels)reRenderFromSource()">
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Height <span style="color:var(--lime3);font-size:.35rem">ANY SIZE</span></label>
+            <input type="number" id="customH" value="200" min="4" max="9999" oninput="if(srcPixels)reRenderFromSource()">
+          </div>
+        </div>
+        <div style="font-family:'VT323',monospace;font-size:.8rem;color:var(--mut);margin-top:4px;line-height:1.4">
+          Image scales to fit within your W×H while keeping aspect ratio. Never stretches or upscales.
+        </div>
+      </div>
+    </div>
+    <!-- ── IMAGE PRE-PROCESSING ── -->
+    <div class="ptitle" style="margin-top:10px">IMAGE PROCESSING</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-family:'VT323',monospace;font-size:.85rem;color:var(--mut)">Auto-apply on change</span>
+    </div>
+
+    <!-- Method 1: Contrast / Saturation / Brightness -->
+    <div class="proc-block" id="procBlock1">
+      <div class="proc-header" onclick="toggleProc(1)">
+        <span class="proc-toggle" id="procToggle1">▶</span>
+        <span class="proc-title">CONTRAST / SAT / BRIGHT</span>
+        <span class="proc-badge good">PORTRAITS</span>
+      </div>
+      <div class="proc-desc">Best for photos &amp; portraits. Boosting contrast separates skin tones from shadows. Saturation pushes colors toward distinct woods. Use when your image looks washed out.</div>
+      <div class="proc-body" id="procBody1" style="display:none">
+        <div class="field" style="margin-bottom:5px"><label>Contrast</label>
+          <div class="slider-row"><input type="range" id="contrastSlider" min="-100" max="100" value="0"><input type="number" class="slider-val" id="contrastVal" value="0" min="-100" max="100"></div>
+        </div>
+        <div class="field" style="margin-bottom:5px"><label>Saturation</label>
+          <div class="slider-row"><input type="range" id="satSlider" min="-100" max="100" value="0"><input type="number" class="slider-val" id="satVal" value="0" min="-100" max="100"></div>
+        </div>
+        <div class="field" style="margin-bottom:5px"><label>Brightness</label>
+          <div class="slider-row"><input type="range" id="brightSlider" min="-100" max="100" value="0"><input type="number" class="slider-val" id="brightVal" value="0" min="-100" max="100"></div>
+        </div>
+        <button class="tbtn" style="font-size:.38rem;margin-top:2px" onclick="resetImageAdjust()">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- Method 2: Dithering -->
+    <div class="proc-block" id="procBlock2">
+      <div class="proc-header" onclick="toggleProc(2)">
+        <span class="proc-toggle" id="procToggle2">▶</span>
+        <span class="proc-title">DITHERING</span>
+        <span class="proc-badge ok">GRADIENTS</span>
+      </div>
+      <div class="proc-desc">Best for smooth gradients &amp; landscapes. Mixes neighboring woods in a checkerboard pattern to fake in-between colors. Makes edges noisy — not ideal for sharp pixel art.</div>
+      <div class="proc-body" id="procBody2" style="display:none">
+        <div class="field" style="margin-bottom:5px"><label>Dither Amount</label>
+          <div class="slider-row"><input type="range" id="ditherSlider" min="0" max="100" value="0"><input type="number" class="slider-val" id="ditherVal" value="0" min="0" max="100"></div>
+        </div>
+        <div class="field" style="margin-bottom:5px">
+          <label>Dither Pattern</label>
+          <select id="ditherMode" onchange="if(srcPixels)reRenderFromSource()" style="font-size:0.85rem">
+            <option value="floyd">Floyd-Steinberg (smooth)</option>
+            <option value="bayer">Bayer 4x4 (ordered/retro)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Method 3: Skip Color Tolerance -->
+    <div class="proc-block" id="procBlock3">
+      <div class="proc-header" onclick="toggleProc(3)">
+        <span class="proc-toggle" id="procToggle3">▶</span>
+        <span class="proc-title">SKIP COLOR TOLERANCE</span>
+        <span class="proc-badge warn">BACKGROUNDS</span>
+      </div>
+      <div class="proc-desc">Best for removing solid backgrounds (e.g. white/green screen). Raises or lowers how strictly the skip color is matched — higher = removes more background, but may eat highlights.</div>
+      <div class="proc-body" id="procBody3" style="display:none">
+        <div class="field" style="margin-bottom:5px"><label>Skip Color</label>
+          <input type="text" id="skipColor" value="#ffffff" style="font-size:0.85rem;font-family:'Share Tech Mono',monospace">
+        </div>
+        <div class="field" style="margin-bottom:5px"><label>Tolerance <span style="color:var(--mut)">(default 10)</span></label>
+          <div class="slider-row"><input type="range" id="skipTolSlider" min="0" max="80" value="0"><input type="number" class="slider-val" id="skipTolVal" value="0" min="0" max="80"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pinfo">
+      <span style="font-family:'Press Start 2P',monospace;font-size:.42rem;color:var(--lime)">PIECE PACKING</span>
+      <div class="pi-chips">
+        <span class="pic">Floor1Large=8x8</span>
+        <span class="pic">Floor1=4x4</span>
+        <span class="pic">Floor1Small=2x2</span>
+        <span class="pic">Floor1Tiny=1x1</span>
+        <span class="pic">Post=1x4</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Placement Plane</label>
+      <select id="plane">
+        <option value="xz">XZ Flat (floor / horizontal)</option>
+        <option value="wall">Wall (vertical, front-facing)</option>
+      </select>
+    </div>
+
+    <button class="gen-btn" id="convertBtn" onclick="doConvert()">Generate AddBP Lua</button>
+
+    <div style="height:12px"></div>
+    <div class="ptitle">CANVAS SETUP</div>
+    <div class="fr2">
+      <div class="field"><label>Width (px)</label><input type="number" id="newW" value="64" min="4" max="256"></div>
+      <div class="field"><label>Height (px)</label><input type="number" id="newH" value="64" min="4" max="256"></div>
+    </div>
+    <button class="tbtn safe" style="width:100%;justify-content:center;margin-top:2px" onclick="newBlankCanvas()">+ NEW BLANK CANVAS</button>
+  </div>
+</div>
+
+<!-- ── OUTPUT ── -->
+<div class="out-area">
+  <div class="out-panel">
+    <!-- Tab bar -->
+    <div class="out-tabs">
+      <button class="out-tab active" id="tabGenerate" onclick="switchOutTab('generate')">▸ LUA OUTPUT</button>
+      <button class="out-tab" id="tabImport" onclick="switchOutTab('import')">▸ LUA → CANVAS</button>
+    </div>
+
+    <!-- Tab: Generate -->
+    <div id="paneGenerate">
+      <div class="ptitle" style="margin-top:10px">LUA OUTPUT ▸ PASTE INTO EXECUTOR</div>
+      <div id="statsRow" style="display:none">
+        <div class="stats">
+          <div class="stat"><span class="v" id="statParts">0</span><span class="l">Total Parts</span></div>
+          <div class="stat o"><span class="v" id="statPixels">0</span><span class="l">Pixels</span></div>
+          <div class="stat g"><span class="v" id="statSaved">-</span><span class="l">Parts Saved</span></div>
+          <div class="stat p"><span class="v" id="statTime">-</span><span class="l">Gen Time</span></div>
+          <div class="stat"><span class="v" id="statSize">-</span><span class="l">Canvas Size</span></div>
+        </div>
+        <div class="breakdown" id="breakdown"></div>
+      </div>
+      <div class="code-box" id="output">-- Load an image or draw on the canvas, then click Generate AddBP Lua</div>
+      <div class="act-row">
+        <button class="abtn" id="copyBtn" onclick="copyLua()">Copy to Clipboard</button>
+        <button class="abtn pb" onclick="downloadLua()">Download .lua</button>
+      </div>
+    </div>
+
+    <!-- Tab: Import -->
+    <div id="paneImport" style="display:none">
+      <div class="ptitle" style="margin-top:10px">LUA → CANVAS ▸ PASTE CODE</div>
+
+      <textarea id="importInput" class="code-box" style="width:100%;box-sizing:border-box;min-height:200px;resize:vertical;outline:none;cursor:text;white-space:pre;font-size:.82rem" placeholder="-- Paste your AddBP Lua here..."></textarea>
+      <div class="act-row" style="margin-top:8px">
+        <button class="abtn" onclick="importFromInput()">&#9654; IMPORT</button>
+        <button class="abtn" onclick="document.getElementById('importInput').value='';setImportStatus('','')">&#10005; Clear</button>
+      </div>
+
+      <div id="importStatus" style="font-family:'Press Start 2P',monospace;font-size:.4rem;margin-top:8px;min-height:14px"></div>
+    </div>
+  </div>
+</div>
+
+<canvas id="workCanvas"></canvas>
+<canvas id="origCanvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// WOOD DATA
+// ═══════════════════════════════════════════════════════════════
+const WOODS = {
+  Generic:[204,142,105],Oak:[234,184,146],Cherry:[163,75,75],Fir:[215,197,154],
+  Birch:[205,205,205],Walnut:[105,64,40],Koa:[143,76,42],Volcano:[255,0,0],
+  GreenSwampy:[52,142,64],GoldSwampy:[226,155,64],Palm:[226,220,188],
+  SnowGlow:[255,255,0],Frost:[159,243,233],CaveCrawler:[16,42,220],
+  BlueSpruce:[159,173,192],LoneCave:[248,248,248],Spooky:[27,16,12],SpookyNeon:[255,120,0]
+};
+const WOOD_NAMES = Object.keys(WOODS);
+const PIECE_SIZES = [{name:'Floor1Large',size:8},{name:'Floor1',size:4},{name:'Floor1Small',size:2},{name:'Floor1Tiny',size:1}];
+const PIECE_STUD = {Floor1Large:8,Floor1:4,Floor1Small:2,Floor1Tiny:1,Post:1};
+const PIECE_DIMS = {Floor1Large:{w:8,h:8},Floor1:{w:4,h:4},Floor1Small:{w:2,h:2},Floor1Tiny:{w:1,h:1},Post:{w:1,h:4}};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let activeTool = 'brush';
+let mirrorH = false, mirrorV = false;
+let activeShape = 'rect';
+let shapeFilled = false;
+let textSize = 1;
+let shapeStart = null;
+let recolorFromWood = null;
+let recolorToWood = null;
+let recolorMode = 'box'; // 'box' or 'lasso'
+let lassoPoints = [];
+let activeWood = 'Generic';
+let outlineWood = 'Walnut';
+let autoProcess = true;
+let lastOutlineMask = null; // Uint8Array of pixels added by last outline op
+let brushSize = 1;
+let zoom = 4;
+let showGrid = false;
+let isDrawing = false;
+let disabledWoods = new Set();
+
+// Canvas pixel data stored as wood name strings (null = empty/transparent)
+let cW = 64, cH = 64;
+let pixels = new Array(cW * cH).fill(null); // null = transparent
+let undoStack = [], redoStack = [];
+let rawImportLines = null; // when set, doConvert emits these verbatim instead of repacking
+const MAX_UNDO = 40;
+
+// ── Source image storage (raw RGBA, never modified) ──
+let srcPixels = null;  // Uint8ClampedArray of original image RGBA
+let srcW = 0, srcH = 0; // original image dimensions (before maxSize clamp)
+
+// ── Manual paint tracking ──
+// Uint8Array parallel to pixels[]: 1 = manually painted by user, 0 = from image
+let manualPixels = new Uint8Array(cW * cH);
+
+// ═══════════════════════════════════════════════════════════════
+// WOOD PALETTE UI
+// ═══════════════════════════════════════════════════════════════
+const woodGridEl = document.getElementById('woodGrid');
+const disableGridEl = document.getElementById('disableGrid');
+
+function buildPalette() {
+  woodGridEl.innerHTML = '';
+  disableGridEl.innerHTML = '';
+  for (const name of WOOD_NAMES) {
+    const [r,g,b] = WOODS[name];
+    const isDis = disabledWoods.has(name);
+
+    // Paint swatch
+    const s = document.createElement('div');
+    s.className = 'wswatch' + (name===activeWood?' sel':'') + (isDis?' dis':'');
+    s.style.background = `rgb(${r},${g},${b})`;
+    s.dataset.name = name;
+    s.title = name;
+    s.addEventListener('click', () => selectWood(name));
+    s.addEventListener('contextmenu', e => { e.preventDefault(); toggleWoodDisabled(name); });
+    woodGridEl.appendChild(s);
+
+    // Disable row
+    const row = document.createElement('div');
+    row.className = 'dis-row';
+
+    const dot = document.createElement('div');
+    dot.className = 'dis-dot';
+    dot.style.background = `rgb(${r},${g},${b})`;
+    dot.style.opacity = isDis ? '0.25' : '1';
+
+    const label = document.createElement('span');
+    label.className = 'dis-name' + (isDis ? ' off' : '');
+    label.textContent = name;
+
+    const btn = document.createElement('button');
+    btn.className = 'dis-btn' + (isDis ? '' : ' on');
+    btn.textContent = isDis ? '✕ OFF' : '✓ ON';
+    btn.title = isDis ? 'Click to include in output' : 'Click to exclude from output';
+    btn.addEventListener('click', () => toggleWoodDisabled(name));
+
+    row.appendChild(dot);
+    row.appendChild(label);
+    row.appendChild(btn);
+    disableGridEl.appendChild(row);
+  }
+}
+function selectWood(name) {
+  activeWood = name;
+  buildPalette();
+  const [r,g,b] = WOODS[name];
+  document.getElementById('curWoodSwatch').style.background = `rgb(${r},${g},${b})`;
+  document.getElementById('curWoodName').textContent = name;
+}
+function toggleWoodDisabled(name) {
+  if (disabledWoods.has(name)) {
+    disabledWoods.delete(name);
+  } else {
+    disabledWoods.add(name);
+    // If this was the active paint color, switch to first enabled wood
+    if (activeWood === name) {
+      const fallback = WOOD_NAMES.find(n => !disabledWoods.has(n));
+      if (fallback) selectWood(fallback);
+    }
+  }
+  buildPalette();
+  // Remap only non-manual pixels (image-derived) to respect new wood set
+  // Manual pixels stay exactly as the user painted them
+  pushUndo();
+  for (let i = 0; i < pixels.length; i++) {
+    if (manualPixels[i]) continue; // user painted this — don't touch
+    const p = pixels[i];
+    if (!p) continue;
+    if (disabledWoods.has(p)) {
+      // Re-map to next closest enabled wood
+      const [dr,dg,db] = WOODS[p];
+      pixels[i] = closestWood(dr,dg,db);
+    }
+  }
+  renderCanvas();
+}
+buildPalette();
+selectWood('Generic');
+// Init outline swatch
+(()=>{ const c=WOODS[outlineWood]; if(c) document.getElementById('outlineSwatchDisplay').style.background=`rgb(${c[0]},${c[1]},${c[2]})`; })();
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS SETUP
+// ═══════════════════════════════════════════════════════════════
+const editCanvas = document.getElementById('editCanvas');
+const eCtx = editCanvas.getContext('2d');
+const cursorCanvas = document.getElementById('cursorOverlay');
+const curCtx = cursorCanvas.getContext('2d');
+const previewCanvas = document.getElementById('previewCanvas');
+const pCtx = previewCanvas.getContext('2d');
+
+function initCanvas(w, h, preservePixels) {
+  cW = w; cH = h;
+  if (!preservePixels) {
+    pixels = new Array(cW * cH).fill(null);
+    manualPixels = new Uint8Array(cW * cH);
+  }
+  undoStack = []; redoStack = [];
+  updateCanvasSize();
+  renderCanvas();
+  document.getElementById('canvasSizeLabel').textContent = cW + ' × ' + cH + ' px';
+}
+
+function updateCanvasSize() {
+  const pw = cW * zoom, ph = cH * zoom;
+  editCanvas.width = pw; editCanvas.height = ph;
+  previewCanvas.width = pw; previewCanvas.height = ph;
+  previewCanvas.style.position = 'absolute';
+  previewCanvas.style.top = '0'; previewCanvas.style.left = '0';
+  previewCanvas.style.pointerEvents = 'none';
+  cursorCanvas.width = pw; cursorCanvas.height = ph;
+  cursorCanvas.style.position = 'absolute';
+  cursorCanvas.style.top = '0'; cursorCanvas.style.left = '0';
+}
+
+function newBlankCanvas() {
+  const w = parseInt(document.getElementById('newW').value) || 64;
+  const h = parseInt(document.getElementById('newH').value) || 64;
+  if (w<4||w>256||h<4||h>256) { alert('Size must be 4–256'); return; }
+  initCanvas(w, h, false);
+}
+initCanvas(64, 64, false);
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+function woodColor(name) {
+  const c = WOODS[name];
+  return c ? `rgb(${c[0]},${c[1]},${c[2]})` : null;
+}
+
+function renderCanvas() {
+  const pw = cW * zoom, ph = cH * zoom;
+  eCtx.clearRect(0, 0, pw, ph);
+
+  // Checkerboard for transparency
+  for (let y = 0; y < cH; y++) {
+    for (let x = 0; x < cW; x++) {
+      const light = (x + y) % 2 === 0;
+      eCtx.fillStyle = light ? '#1a1a2a' : '#141420';
+      eCtx.fillRect(x*zoom, y*zoom, zoom, zoom);
+    }
+  }
+
+  // Pixels
+  for (let y = 0; y < cH; y++) {
+    for (let x = 0; x < cW; x++) {
+      const wood = pixels[y*cW+x];
+      if (!wood) continue;
+      eCtx.fillStyle = woodColor(wood);
+      eCtx.fillRect(x*zoom, y*zoom, zoom, zoom);
+    }
+  }
+
+  // Grid
+  if (showGrid && zoom >= 4) {
+    eCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+    eCtx.lineWidth = 0.5;
+    for (let x = 0; x <= cW; x++) { eCtx.beginPath(); eCtx.moveTo(x*zoom,0); eCtx.lineTo(x*zoom,ph); eCtx.stroke(); }
+    for (let y = 0; y <= cH; y++) { eCtx.beginPath(); eCtx.moveTo(0,y*zoom); eCtx.lineTo(pw,y*zoom); eCtx.stroke(); }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CURSOR OVERLAY
+// ═══════════════════════════════════════════════════════════════
+function drawCursor(px, py) {
+  curCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+  const noBrush = activeTool==='fill'||activeTool==='fill-erase'||activeTool==='eyedrop'||activeTool==='recolor'||activeTool==='line'||activeTool==='shape';
+  if (noBrush) return;
+  const r = Math.floor((brushSize - 1) / 2);
+  const x0 = (px - r) * zoom, y0 = (py - r) * zoom;
+  const sz = brushSize * zoom;
+  curCtx.strokeStyle = 'rgba(255,255,255,0.7)';
+  curCtx.lineWidth = 1;
+  curCtx.strokeRect(x0, y0, sz, sz);
+  curCtx.strokeStyle = 'rgba(0,0,0,0.4)';
+  curCtx.lineWidth = 0.5;
+  curCtx.strokeRect(x0+1, y0+1, sz-2, sz-2);
+}
+function clearCursor() { curCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height); }
+
+// ═══════════════════════════════════════════════════════════════
+// UNDO/REDO
+// ═══════════════════════════════════════════════════════════════
+function pushUndo() {
+  rawImportLines = null; // drawing invalidates passthrough
+  undoStack.push({ pixels: pixels.slice(), manual: manualPixels.slice() });
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack = [];
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push({ pixels: pixels.slice(), manual: manualPixels.slice() });
+  const snap = undoStack.pop();
+  pixels = snap.pixels; manualPixels = snap.manual;
+  renderCanvas();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push({ pixels: pixels.slice(), manual: manualPixels.slice() });
+  const snap = redoStack.pop();
+  pixels = snap.pixels; manualPixels = snap.manual;
+  renderCanvas();
+}
+function clearCanvas() {
+  pushUndo();
+  pixels = new Array(cW * cH).fill(null);
+  manualPixels = new Uint8Array(cW * cH);
+  renderCanvas();
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// DRAW HELPERS
+// ═══════════════════════════════════════════════════════════════
+function bresenham(x0,y0,x1,y1,cb) {
+  let dx=Math.abs(x1-x0),dy=Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1,err=dx-dy;
+  while(true){cb(x0,y0);if(x0===x1&&y0===y1)break;const e2=2*err;if(e2>-dy){err-=dy;x0+=sx;}if(e2<dx){err+=dx;y0+=sy;}}
+}
+function drawLinePixels(x0,y0,x1,y1,wood) {
+  bresenham(x0,y0,x1,y1,(x,y)=>setPixel(x,y,wood));
+  if(mirrorH){bresenham(cW-1-x0,y0,cW-1-x1,y1,(x,y)=>setPixel(x,y,wood));}
+  if(mirrorV){bresenham(x0,cH-1-y0,x1,cH-1-y1,(x,y)=>setPixel(x,y,wood));}
+  if(mirrorH&&mirrorV){bresenham(cW-1-x0,cH-1-y0,cW-1-x1,cH-1-y1,(x,y)=>setPixel(x,y,wood));}
+}
+function drawRectPixels(x0,y0,x1,y1,wood,filled) {
+  const lx=Math.min(x0,x1),rx=Math.max(x0,x1),ty=Math.min(y0,y1),by=Math.max(y0,y1);
+  if(filled){for(let y=ty;y<=by;y++)for(let x=lx;x<=rx;x++)setPixel(x,y,wood);}
+  else{for(let x=lx;x<=rx;x++){setPixel(x,ty,wood);setPixel(x,by,wood);}for(let y=ty+1;y<by;y++){setPixel(lx,y,wood);setPixel(rx,y,wood);}}
+  if(mirrorH){const mx0=cW-1-lx,mx1=cW-1-rx;drawRectPixels(Math.min(mx0,mx1),ty,Math.max(mx0,mx1),by,wood,filled);}
+  if(mirrorV){const my0=cH-1-ty,my1=cH-1-by;drawRectPixels(lx,Math.min(my0,my1),rx,Math.max(my0,my1),wood,filled);}
+  if(mirrorH&&mirrorV){const mx0=cW-1-lx,mx1=cW-1-rx,my0=cH-1-ty,my1=cH-1-by;drawRectPixels(Math.min(mx0,mx1),Math.min(my0,my1),Math.max(mx0,mx1),Math.max(my0,my1),wood,filled);}
+}
+function drawCirclePixels(cx,cy,rx,ry,wood,filled) {
+  const steps=Math.max(rx,ry)*4+8;
+  const pts=new Set();
+  for(let i=0;i<steps;i++){const a=2*Math.PI*i/steps;const px=Math.round(cx+rx*Math.cos(a)),py=Math.round(cy+ry*Math.sin(a));pts.add(px+','+py);}
+  if(filled){
+    const minY=cy-ry,maxY=cy+ry;
+    for(let y=minY;y<=maxY;y++){const xs=[];for(const k of pts){const[px,py]=k.split(',').map(Number);if(py===y)xs.push(px);}if(!xs.length)continue;const mnx=Math.min(...xs),mxx=Math.max(...xs);for(let x=mnx;x<=mxx;x++)setPixel(x,y,wood);}
+  } else {for(const k of pts){const[px,py]=k.split(',').map(Number);setPixel(px,py,wood);}}
+  if(mirrorH){drawCirclePixels(cW-1-cx,cy,rx,ry,wood,filled);}
+  if(mirrorV){drawCirclePixels(cx,cH-1-cy,rx,ry,wood,filled);}
+  if(mirrorH&&mirrorV){drawCirclePixels(cW-1-cx,cH-1-cy,rx,ry,wood,filled);}
+}
+// 5×7 bitmap font — A-Z 0-9 and common symbols
+const FONT5X7 = {
+  'A':['01110','10001','10001','11111','10001','10001','10001'],
+  'B':['11110','10001','10001','11110','10001','10001','11110'],
+  'C':['01110','10001','10000','10000','10000','10001','01110'],
+  'D':['11100','10010','10001','10001','10001','10010','11100'],
+  'E':['11111','10000','10000','11110','10000','10000','11111'],
+  'F':['11111','10000','10000','11110','10000','10000','10000'],
+  'G':['01110','10001','10000','10111','10001','10001','01111'],
+  'H':['10001','10001','10001','11111','10001','10001','10001'],
+  'I':['01110','00100','00100','00100','00100','00100','01110'],
+  'J':['00111','00010','00010','00010','00010','10010','01100'],
+  'K':['10001','10010','10100','11000','10100','10010','10001'],
+  'L':['10000','10000','10000','10000','10000','10000','11111'],
+  'M':['10001','11011','10101','10101','10001','10001','10001'],
+  'N':['10001','11001','10101','10011','10001','10001','10001'],
+  'O':['01110','10001','10001','10001','10001','10001','01110'],
+  'P':['11110','10001','10001','11110','10000','10000','10000'],
+  'Q':['01110','10001','10001','10001','10101','10010','01101'],
+  'R':['11110','10001','10001','11110','10100','10010','10001'],
+  'S':['01111','10000','10000','01110','00001','00001','11110'],
+  'T':['11111','00100','00100','00100','00100','00100','00100'],
+  'U':['10001','10001','10001','10001','10001','10001','01110'],
+  'V':['10001','10001','10001','10001','01010','01010','00100'],
+  'W':['10001','10001','10001','10101','10101','11011','10001'],
+  'X':['10001','10001','01010','00100','01010','10001','10001'],
+  'Y':['10001','10001','01010','00100','00100','00100','00100'],
+  'Z':['11111','00001','00010','00100','01000','10000','11111'],
+  '0':['01110','10001','10011','10101','11001','10001','01110'],
+  '1':['00100','01100','00100','00100','00100','00100','01110'],
+  '2':['01110','10001','00001','00110','01000','10000','11111'],
+  '3':['11111','00010','00100','00110','00001','10001','01110'],
+  '4':['00010','00110','01010','10010','11111','00010','00010'],
+  '5':['11111','10000','11110','00001','00001','10001','01110'],
+  '6':['00110','01000','10000','11110','10001','10001','01110'],
+  '7':['11111','00001','00010','00100','01000','01000','01000'],
+  '8':['01110','10001','10001','01110','10001','10001','01110'],
+  '9':['01110','10001','10001','01111','00001','00010','01100'],
+  ' ':['00000','00000','00000','00000','00000','00000','00000'],
+  '!':['00100','00100','00100','00100','00100','00000','00100'],
+  '?':['01110','10001','00001','00010','00100','00000','00100'],
+  '.':['00000','00000','00000','00000','00000','00000','00100'],
+  ',':['00000','00000','00000','00000','00110','00100','01000'],
+  ':':['00000','00100','00000','00000','00000','00100','00000'],
+  '-':['00000','00000','00000','11111','00000','00000','00000'],
+  '+':['00000','00100','00100','11111','00100','00100','00000'],
+  '*':['00000','10101','01110','11111','01110','10101','00000'],
+  '/':['00001','00001','00010','00100','01000','10000','10000'],
+  '(':['00010','00100','01000','01000','01000','00100','00010'],
+  ')':['01000','00100','00010','00010','00010','00100','01000'],
+  '#':['01010','01010','11111','01010','11111','01010','01010'],
+  '@':['01110','10001','00001','01101','10101','10101','01110'],
+  '%':['11000','11001','00010','00100','01000','10011','00011'],
+  '&':['01100','10010','10010','01100','10010','10001','01101'],
+  '_':['00000','00000','00000','00000','00000','00000','11111'],
+  '^':['00100','01010','10001','00000','00000','00000','00000'],
+  '=':['00000','00000','11111','00000','11111','00000','00000'],
+  '<':['00010','00100','01000','10000','01000','00100','00010'],
+  '>':['01000','00100','00010','00001','00010','00100','01000'],
+  '"':['01010','01010','01010','00000','00000','00000','00000'],
+  "'":['00100','00100','01000','00000','00000','00000','00000'],
+};
+function drawTextPixels(text, ox, oy, wood, scale) {
+  let cx = ox;
+  for (const ch of text.toUpperCase()) {
+    const rows = FONT5X7[ch] || FONT5X7['?'];
+    for (let row=0;row<7;row++) {
+      for (let col=0;col<5;col++) {
+        if (rows[row][col]==='1') {
+          for(let sy=0;sy<scale;sy++) for(let sx=0;sx<scale;sx++)
+            setPixel(cx+col*scale+sx, oy+row*scale+sy, wood);
+        }
+      }
+    }
+    cx += (6)*scale;
+  }
+}
+// Preview on overlay canvas
+function previewLine(x0,y0,x1,y1) {
+  pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  const col = woodColor(activeWood)||'#fff';
+  const pts=[];
+  bresenham(x0,y0,x1,y1,(x,y)=>pts.push([x,y]));
+  pCtx.fillStyle=col+'aa';
+  for(const[x,y] of pts) pCtx.fillRect(x*zoom,y*zoom,zoom,zoom);
+}
+function previewRect(x0,y0,x1,y1) {
+  pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  const col = woodColor(activeWood)||'#fff';
+  const lx=Math.min(x0,x1),rx=Math.max(x0,x1),ty=Math.min(y0,y1),by=Math.max(y0,y1);
+  pCtx.fillStyle=col+'99';
+  if(shapeFilled){pCtx.fillRect(lx*zoom,ty*zoom,(rx-lx+1)*zoom,(by-ty+1)*zoom);}
+  else{pCtx.strokeStyle=col;pCtx.lineWidth=zoom;pCtx.strokeRect((lx+0.5)*zoom,(ty+0.5)*zoom,(rx-lx)*zoom,(by-ty)*zoom);}
+}
+function previewCircle(x0,y0,x1,y1) {
+  pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  const col = woodColor(activeWood)||'#fff';
+  const cx=(x0+x1)/2,cy=(y0+y1)/2,rx=Math.abs(x1-x0)/2,ry=Math.abs(y1-y0)/2;
+  pCtx.beginPath();
+  pCtx.ellipse((cx+0.5)*zoom,(cy+0.5)*zoom,rx*zoom,ry*zoom,0,0,2*Math.PI);
+  if(shapeFilled){pCtx.fillStyle=col+'99';pCtx.fill();}
+  else{pCtx.strokeStyle=col;pCtx.lineWidth=zoom*0.6;pCtx.stroke();}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RECOLOR TOOL
+// ═══════════════════════════════════════════════════════════════
+function setRecolorMode(m) {
+  recolorMode = m;
+  document.getElementById('recolorModeBox').classList.toggle('active', m==='box');
+  document.getElementById('recolorModeLasso').classList.toggle('active', m==='lasso');
+}
+function updateRecolorSwatch(which, wood) {
+  const col = woodColor(wood) || '#888';
+  document.getElementById('recolor'+which+'Swatch').style.background = col;
+  document.getElementById('recolor'+which+'Name').textContent = wood;
+}
+function pickRecolorFrom() {
+  // Set picking mode — next eyedrop click sets from
+  recolorPicking = 'from';
+  setTool('eyedrop');
+  document.getElementById('canvasOuter').style.cursor = 'crosshair';
+}
+function pickRecolorTo() {
+  recolorPicking = 'to';
+  setTool('eyedrop');
+  document.getElementById('canvasOuter').style.cursor = 'crosshair';
+}
+let recolorPicking = null;
+
+function applyRecolorBox(x0,y0,x1,y1) {
+  if(!recolorFromWood||!recolorToWood) return;
+  const lx=Math.min(x0,x1),rx=Math.max(x0,x1),ty=Math.min(y0,y1),by=Math.max(y0,y1);
+  pushUndo();
+  for(let y=ty;y<=by;y++) for(let x=lx;x<=rx;x++) {
+    const i=y*cW+x;
+    if(pixels[i]===recolorFromWood) { pixels[i]=recolorToWood; manualPixels[i]=1; }
+  }
+  renderCanvas();
+}
+function applyRecolorLasso(pts) {
+  if(!recolorFromWood||!recolorToWood||pts.length<3) return;
+  // Build bounding box then point-in-polygon test
+  const minX=Math.min(...pts.map(p=>p[0])),maxX=Math.max(...pts.map(p=>p[0]));
+  const minY=Math.min(...pts.map(p=>p[1])),maxY=Math.max(...pts.map(p=>p[1]));
+  pushUndo();
+  for(let y=minY;y<=maxY;y++) for(let x=minX;x<=maxX;x++) {
+    if(pointInPolygon(x,y,pts)) {
+      const i=y*cW+x;
+      if(pixels[i]===recolorFromWood) { pixels[i]=recolorToWood; manualPixels[i]=1; }
+    }
+  }
+  renderCanvas();
+}
+function pointInPolygon(x,y,pts) {
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function previewSelectionBox(x0,y0,x1,y1) {
+  pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  curCtx.clearRect(0,0,cursorCanvas.width,cursorCanvas.height);
+  const lx=Math.min(x0,x1),rx=Math.max(x0,x1),ty=Math.min(y0,y1),by=Math.max(y0,y1);
+  // Highlight matching pixels in tint on preview layer
+  if(recolorFromWood) {
+    pCtx.fillStyle=(woodColor(recolorFromWood)||'#fff')+'55';
+    for(let y=ty;y<=by;y++) for(let x=lx;x<=rx;x++)
+      if(pixels[y*cW+x]===recolorFromWood) pCtx.fillRect(x*zoom,y*zoom,zoom,zoom);
+  }
+  // Dashed selection rectangle on cursor layer
+  curCtx.save();
+  curCtx.strokeStyle='rgba(255,255,255,0.9)';
+  curCtx.lineWidth=1.5;
+  curCtx.setLineDash([4,4]);
+  curCtx.strokeRect(lx*zoom+0.5, ty*zoom+0.5, (rx-lx+1)*zoom-1, (by-ty+1)*zoom-1);
+  curCtx.strokeStyle='rgba(0,0,0,0.5)';
+  curCtx.lineWidth=1;
+  curCtx.lineDashOffset=4;
+  curCtx.strokeRect(lx*zoom+0.5, ty*zoom+0.5, (rx-lx+1)*zoom-1, (by-ty+1)*zoom-1);
+  curCtx.restore();
+}
+function previewLassoPath(pts) {
+  if(pts.length<2) return;
+  pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  pCtx.strokeStyle='rgba(255,255,255,0.8)';
+  pCtx.lineWidth=1;
+  pCtx.setLineDash([4,4]);
+  pCtx.beginPath();
+  pCtx.moveTo((pts[0][0]+0.5)*zoom,(pts[0][1]+0.5)*zoom);
+  for(let i=1;i<pts.length;i++) pCtx.lineTo((pts[i][0]+0.5)*zoom,(pts[i][1]+0.5)*zoom);
+  pCtx.stroke();
+  pCtx.setLineDash([]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLS
+// ═══════════════════════════════════════════════════════════════
+function setTool(t) {
+  activeTool = t;
+  ['Brush','Fill','Erase','FillErase','Line','Eyedrop','Shape','Recolor'].forEach(n => {
+    const el = document.getElementById('btn'+n);
+    if (el) el.classList.toggle('active', t===n.toLowerCase().replace('fillerase','fill-erase'));
+  });
+  const isFill = t==='fill'||t==='fill-erase';
+  const isEye  = t==='eyedrop';
+  document.getElementById('brushSizeGroup').style.display = (isFill||t==='line'||t==='shape'||isEye||t==='recolor') ? 'none' : 'block';
+  document.getElementById('shapeToolGroup').style.display = t==='shape' ? 'block' : 'none';
+  document.getElementById('recolorToolGroup').style.display = t==='recolor' ? 'block' : 'none';
+  document.getElementById('canvasOuter').style.cursor = isFill ? 'cell' : isEye ? 'crosshair' : t==='recolor' ? 'crosshair' : 'none';
+  pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  shapeStart = null;
+}
+function setShape(s) {
+  activeShape = s;
+  ['Rect','Circle','Text'].forEach(n => {
+    const el = document.getElementById('shape'+n);
+    if(el) el.classList.toggle('active', s===n.toLowerCase());
+  });
+  document.getElementById('shapeTextInput').style.display = s==='text' ? 'block' : 'none';
+}
+function setShapeFill(filled) {
+  shapeFilled = filled;
+  document.getElementById('shapeHollow').classList.toggle('active', !filled);
+  document.getElementById('shapeFilled').classList.toggle('active', filled);
+}
+function setTextSize(s) {
+  textSize = s;
+  [1,2,3].forEach(n => {
+    const el = document.getElementById('text'+(n===1?'Sm':n===2?'Md':'Lg'));
+    if(el) el.classList.toggle('active', n===s);
+  });
+}
+function toggleMirror(axis) {
+  if(axis==='h') {
+    mirrorH = !mirrorH;
+    document.getElementById('btnMirrorH').classList.toggle('active', mirrorH);
+  } else {
+    mirrorV = !mirrorV;
+    document.getElementById('btnMirrorV').classList.toggle('active', mirrorV);
+  }
+}
+
+function getPixelPos(e) {
+  const rect = editCanvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / zoom);
+  const y = Math.floor((e.clientY - rect.top) / zoom);
+  return { x: Math.max(0,Math.min(cW-1,x)), y: Math.max(0,Math.min(cH-1,y)) };
+}
+
+// ── Fill empty pixels with nearest filled neighbour (BFS wavefront from filled pixels) ──
+function fillEmptyNearest() {
+  // Count empty pixels first — if none, do nothing
+  const emptyCount = pixels.filter(p => !p).length;
+  if (!emptyCount) return;
+
+  pushUndo();
+
+  // BFS: seed queue with all currently filled pixels
+  // Each empty pixel gets the wood of the first filled pixel that reaches it
+  const result = pixels.slice(); // copy
+  const visited = new Uint8Array(cW * cH);
+  const queue = [];
+
+  for (let i = 0; i < cW * cH; i++) {
+    if (result[i]) {
+      visited[i] = 1;
+      queue.push(i);
+    }
+  }
+
+  let head = 0;
+  const DIRS = [-1, 1, -cW, cW]; // left, right, up, down
+
+  while (head < queue.length) {
+    const idx = queue[head++];
+    const wood = result[idx];
+    const x = idx % cW;
+    const y = Math.floor(idx / cW);
+
+    for (const d of DIRS) {
+      const ni = idx + d;
+      // Bounds check: prevent wrap-around on left/right edges
+      if (d === -1 && x === 0) continue;
+      if (d ===  1 && x === cW - 1) continue;
+      if (ni < 0 || ni >= cW * cH) continue;
+      if (visited[ni]) continue;
+      visited[ni] = 1;
+      result[ni] = wood;
+      queue.push(ni);
+    }
+  }
+
+  pixels = result;
+  // Mark all newly filled pixels as manual so re-render doesn't overwrite them
+  for (let i = 0; i < cW * cH; i++) {
+    if (!manualPixels[i] && pixels[i]) manualPixels[i] = 1;
+  }
+  renderCanvas();
+}
+
+function setPixel(x, y, wood) {
+  if (x<0||x>=cW||y<0||y>=cH) return;
+  pixels[y*cW+x] = wood;
+  manualPixels[y*cW+x] = 1;
+}
+function paintAt(px, py, wood) {
+  const r = Math.floor((brushSize - 1) / 2);
+  for (let dy = -r; dy <= brushSize-1-r; dy++)
+    for (let dx = -r; dx <= brushSize-1-r; dx++)
+      setPixel(px+dx, py+dy, wood);
+  if (mirrorH) { const mx = cW-1-px; for (let dy=-r;dy<=brushSize-1-r;dy++) for (let dx=-r;dx<=brushSize-1-r;dx++) setPixel(mx+dx,py+dy,wood); }
+  if (mirrorV) { const my = cH-1-py; for (let dy=-r;dy<=brushSize-1-r;dy++) for (let dx=-r;dx<=brushSize-1-r;dx++) setPixel(px+dx,my+dy,wood); }
+  if (mirrorH&&mirrorV) { const mx=cW-1-px,my=cH-1-py; for (let dy=-r;dy<=brushSize-1-r;dy++) for (let dx=-r;dx<=brushSize-1-r;dx++) setPixel(mx+dx,my+dy,wood); }
+}
+function paintBrush(px, py) {
+  const wood = activeTool === 'erase' ? null : activeWood;
+  paintAt(px, py, wood);
+}
+
+function floodFill(sx, sy, targetWood, fillWood) {
+  if (targetWood === fillWood) return;
+  const stack = [[sx, sy]];
+  const visited = new Uint8Array(cW * cH);
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    const idx = y*cW+x;
+    if (visited[idx]) continue;
+    if (pixels[idx] !== targetWood) continue;
+    visited[idx] = 1;
+    pixels[idx] = fillWood;
+    manualPixels[idx] = 1; // mark as manually painted
+    if (x>0) stack.push([x-1,y]);
+    if (x<cW-1) stack.push([x+1,y]);
+    if (y>0) stack.push([x,y-1]);
+    if (y<cH-1) stack.push([x,y+1]);
+  }
+}
+
+// Mouse events
+const outer = document.getElementById('canvasOuter');
+let lastPx=-1, lastPy=-1;
+let didPaint = false;
+
+// ── Pan state ──
+let isPanning = false;
+let panStartX = 0, panStartY = 0;
+let panScrollX = 0, panScrollY = 0;
+
+editCanvas.addEventListener('mousedown', e => {
+  // Blur any focused text input so Ctrl+Z reaches the canvas handler
+  if (document.activeElement && (document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA')) {
+    document.activeElement.blur();
+  }
+  // Middle mouse + Shift = pan
+  if (e.button === 1 && e.shiftKey) {
+    e.preventDefault();
+    isPanning = true;
+    panStartX = e.clientX + outer.scrollLeft;
+    panStartY = e.clientY + outer.scrollTop;
+    outer.style.cursor = 'grabbing';
+    return;
+  }
+  if (e.button !== 0) return;
+  const {x,y} = getPixelPos(e);
+
+  if (activeTool === 'eyedrop') {
+    const w = pixels[y*cW+x];
+    if (w) {
+      if (recolorPicking === 'from') {
+        recolorFromWood = w;
+        updateRecolorSwatch('From', w);
+        recolorPicking = null;
+        setTool('recolor');
+        return;
+      } else if (recolorPicking === 'to') {
+        recolorToWood = w;
+        updateRecolorSwatch('To', w);
+        recolorPicking = null;
+        setTool('recolor');
+        return;
+      }
+      activeWood = w;
+      document.getElementById('curWoodName').textContent = w;
+      document.getElementById('curWoodSwatch').style.background = woodColor(w);
+      const btns = document.querySelectorAll('.wood-btn');
+      btns.forEach(b => b.classList.toggle('active', b.dataset.wood === w));
+    }
+    return;
+  }
+  if (activeTool === 'recolor') {
+    shapeStart = {x,y};
+    lassoPoints = [[x,y]];
+    isDrawing = true;
+    return;
+  }
+  if (activeTool === 'line' || activeTool === 'shape') {
+    shapeStart = {x,y};
+    isDrawing = true;
+    return;
+  }
+  pushUndo();
+  didPaint = true;
+  if (activeTool === 'fill') {
+    floodFill(x, y, pixels[y*cW+x], activeWood);
+    renderCanvas();
+  } else if (activeTool === 'fill-erase') {
+    floodFill(x, y, pixels[y*cW+x], null);
+    renderCanvas();
+  } else {
+    paintBrush(x, y);
+    renderCanvas();
+  }
+  isDrawing = true; lastPx=x; lastPy=y;
+});
+
+editCanvas.addEventListener('mousemove', e => {
+  // Handle panning
+  if (isPanning) {
+    outer.scrollLeft = panStartX - e.clientX;
+    outer.scrollTop  = panStartY - e.clientY;
+    return;
+  }
+  const {x,y} = getPixelPos(e);
+  document.getElementById('coordBar').textContent = 'x:'+x+' y:'+y+'  |  '+cW+'×'+cH;
+  drawCursor(x, y);
+
+  if (activeTool==='recolor' && isDrawing && shapeStart) {
+    if(recolorMode==='box') previewSelectionBox(shapeStart.x,shapeStart.y,x,y);
+    else { lassoPoints.push([x,y]); previewLassoPath(lassoPoints); }
+    return;
+  }
+  if (activeTool==='line' && isDrawing && shapeStart) {
+    previewLine(shapeStart.x, shapeStart.y, x, y);
+    return;
+  }
+  if (activeTool==='shape' && isDrawing && shapeStart) {
+    if(activeShape==='rect') previewRect(shapeStart.x,shapeStart.y,x,y);
+    else if(activeShape==='circle') previewCircle(shapeStart.x,shapeStart.y,x,y);
+    return;
+  }
+
+  if (!isDrawing || activeTool==='fill' || activeTool==='fill-erase') return;
+  if (x===lastPx && y===lastPy) return;
+  // Line interpolation for fast drags
+  const dx=x-lastPx, dy=y-lastPy;
+  const steps=Math.max(Math.abs(dx),Math.abs(dy));
+  for (let i=1;i<=steps;i++) {
+    const ix=Math.round(lastPx+dx*i/steps), iy=Math.round(lastPy+dy*i/steps);
+    paintBrush(ix,iy);
+  }
+  lastPx=x; lastPy=y;
+  renderCanvas();
+});
+
+editCanvas.addEventListener('mouseup', e => {
+  if (isPanning) {
+    isPanning = false;
+    outer.style.cursor = (activeTool==='fill'||activeTool==='fill-erase') ? 'cell' : 'none';
+    isDrawing = false;
+    return;
+  }
+  if (e.button !== 0) { isDrawing = false; return; }
+  const {x,y} = getPixelPos(e);
+
+  if (activeTool === 'recolor' && shapeStart) {
+    pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+    curCtx.clearRect(0,0,cursorCanvas.width,cursorCanvas.height);
+    if(recolorMode==='box') applyRecolorBox(shapeStart.x,shapeStart.y,x,y);
+    else applyRecolorLasso(lassoPoints);
+    shapeStart=null; lassoPoints=[];
+  } else if (activeTool === 'line' && shapeStart) {
+    pushUndo();
+    drawLinePixels(shapeStart.x, shapeStart.y, x, y, activeWood);
+    pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+    shapeStart = null;
+    renderCanvas();
+  } else if (activeTool === 'shape' && shapeStart) {
+    pushUndo();
+    if (activeShape === 'rect') {
+      drawRectPixels(shapeStart.x,shapeStart.y,x,y,activeWood,shapeFilled);
+    } else if (activeShape === 'circle') {
+      const cx=Math.round((shapeStart.x+x)/2),cy=Math.round((shapeStart.y+y)/2);
+      const rx=Math.abs(x-shapeStart.x)/2,ry=Math.abs(y-shapeStart.y)/2;
+      drawCirclePixels(cx,cy,Math.round(rx),Math.round(ry),activeWood,shapeFilled);
+    } else if (activeShape === 'text') {
+      const txt = document.getElementById('shapeTextVal').value || 'HELLO';
+      drawTextPixels(txt, shapeStart.x, shapeStart.y, activeWood, textSize);
+    }
+    pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+    shapeStart = null;
+    renderCanvas();
+  }
+  isDrawing = false;
+});
+editCanvas.addEventListener('mouseleave', () => {
+  isDrawing = false;
+  if (isPanning) { isPanning = false; outer.style.cursor = (activeTool==='fill'||activeTool==='fill-erase') ? 'cell' : 'none'; }
+  clearCursor();
+  document.getElementById('coordBar').textContent = '';
+});
+
+// Touch support
+editCanvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t=e.touches[0];
+  const me = { clientX:t.clientX, clientY:t.clientY, button:0 };
+  editCanvas.dispatchEvent(new MouseEvent('mousedown',me));
+}, {passive:false});
+editCanvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t=e.touches[0];
+  const me = { clientX:t.clientX, clientY:t.clientY };
+  editCanvas.dispatchEvent(new MouseEvent('mousemove',me));
+}, {passive:false});
+editCanvas.addEventListener('touchend', () => editCanvas.dispatchEvent(new MouseEvent('mouseup')));
+
+// ═══════════════════════════════════════════════════════════════
+// ZOOM + GRID
+// ═══════════════════════════════════════════════════════════════
+function applyZoom(z) {
+  zoom = Math.max(1, Math.min(24, z));
+  document.getElementById('zoomLabel').textContent = 'Zoom: '+zoom+'x';
+  updateCanvasSize();
+  renderCanvas();
+}
+function zoomIn()  { applyZoom(zoom+1); }
+function zoomOut() { applyZoom(zoom-1); }
+function zoomReset(){ applyZoom(4); }
+function toggleGrid() {
+  showGrid = !showGrid;
+  document.getElementById('btnGrid').classList.toggle('active', showGrid);
+  renderCanvas();
+}
+
+// Brush size slider
+document.getElementById('brushSize').addEventListener('input', function(){
+  brushSize = parseInt(this.value);
+  document.getElementById('brushSizeVal').value = brushSize;
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  const tag = e.target.tagName;
+  const isTextField = tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
+  // Allow browser default undo in text fields, but still handle canvas shortcuts elsewhere
+  if (isTextField) return;
+  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); if(e.shiftKey) redo(); else undo(); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='y') { e.preventDefault(); redo(); }
+  if (e.key==='b') setTool('brush');
+  if (e.key==='f') setTool('fill');
+  if (e.key==='e') setTool('erase');
+  if (e.key==='x') setTool('fill-erase');
+  if (e.key==='l') setTool('line');
+  if (e.key==='i') setTool('eyedrop');
+  if (e.key==='+') zoomIn();
+  if (e.key==='-') zoomOut();
+  if (e.key==='g') toggleGrid();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// IMAGE LOADING
+// ═══════════════════════════════════════════════════════════════
+const workCanvas = document.getElementById('workCanvas');
+const wCtx = workCanvas.getContext('2d');
+
+// Pre-compute LAB values for all woods once
+let spookyMode = false;
+
+function toggleSpookyMode() {
+  spookyMode = !spookyMode;
+  const btn = document.getElementById('spookyToggleBtn');
+  btn.textContent = spookyMode ? '✓ ON' : '✕ OFF';
+  btn.className = 'dis-btn' + (spookyMode ? ' on' : '');
+  if (srcPixels) reRenderFromSource();
+}
+
+// Color matching mode: 'rgb' or 'lab'
+let colorMatchMode = 'rgb';
+function toggleColorMode() {
+  colorMatchMode = colorMatchMode === 'rgb' ? 'lab' : 'rgb';
+  const btn = document.getElementById('colorModeBtn');
+  const desc = document.getElementById('colorModeDesc');
+  btn.textContent = colorMatchMode === 'rgb' ? 'RGB' : 'LAB';
+  btn.className = colorMatchMode === 'lab' ? 'dis-btn on' : 'dis-btn';
+  desc.textContent = colorMatchMode === 'rgb' ? 'Simple RGB distance' : 'Perceptual LAB (more accurate)';
+  if (srcPixels) reRenderFromSource();
+}
+
+function rgbToLab(r,g,b){
+  let R=r/255,G=g/255,B=b/255;
+  R=R>0.04045?Math.pow((R+0.055)/1.055,2.4):R/12.92;
+  G=G>0.04045?Math.pow((G+0.055)/1.055,2.4):G/12.92;
+  B=B>0.04045?Math.pow((B+0.055)/1.055,2.4):B/12.92;
+  let X=(R*0.4124564+G*0.3575761+B*0.1804375)/0.95047;
+  let Y=(R*0.2126729+G*0.7151522+B*0.0721750)/1.00000;
+  let Z=(R*0.0193339+G*0.1191920+B*0.9503041)/1.08883;
+  const f=t=>t>0.008856?Math.pow(t,1/3):7.787*t+16/116;
+  const fx=f(X),fy=f(Y),fz=f(Z);
+  return [116*fy-16,500*(fx-fy),200*(fy-fz)];
+}
+const WOODS_LAB={};
+for(const[n,[r,g,b]] of Object.entries(WOODS)) WOODS_LAB[n]=rgbToLab(r,g,b);
+
+function closestWood(r,g,b) {
+  let best=null,bd=Infinity;
+  if (colorMatchMode === 'lab') {
+    const [L,A,B] = rgbToLab(r,g,b);
+    for (const [n,[wL,wA,wB]] of Object.entries(WOODS_LAB)) {
+      if (disabledWoods.has(n)) continue;
+      const d=(L-wL)**2+(A-wA)**2+(B-wB)**2;
+      if(d<bd){bd=d;best=n}
+    }
+    if (spookyMode && best==='Walnut' && L<30 && !disabledWoods.has('Spooky')) best='Spooky';
+  } else {
+    for (const [n,[wr,wg,wb]] of Object.entries(WOODS)) {
+      if (disabledWoods.has(n)) continue;
+      const d=(r-wr)**2+(g-wg)**2+(b-wb)**2;
+      if(d<bd){bd=d;best=n}
+    }
+    if (spookyMode && best==='Walnut' && r<60&&g<60&&b<60 && !disabledWoods.has('Spooky')) best='Spooky';
+  }
+  return best;
+}
+
+function loadImage(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { alert('Please select a valid image file.'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      // Store full-res source pixels as ground truth
+      workCanvas.width = img.naturalWidth; workCanvas.height = img.naturalHeight;
+      wCtx.clearRect(0,0,img.naturalWidth,img.naturalHeight);
+      wCtx.drawImage(img,0,0);
+      try {
+        const id = wCtx.getImageData(0,0,img.naturalWidth,img.naturalHeight);
+        srcPixels = id.data.slice(); // clone
+        srcW = img.naturalWidth;
+        srcH = img.naturalHeight;
+      } catch(err) { alert('Could not read pixel data'); return; }
+      document.getElementById('fileName').textContent = file.name;
+      reRenderFromSource();
+    };
+    img.onerror=()=>alert('Could not load image.');
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Re-map source image → canvas using current maxSize, skipColor, disabledWoods
+function reRenderFromSource() {
+  if (!srcPixels) return;
+
+  let w, h;
+  if (qualityMode === 'custom') {
+    const maxW = Math.min(200, Math.max(4, parseInt(document.getElementById('customW').value) || 200));
+    const maxH = Math.max(4, parseInt(document.getElementById('customH').value) || 200);
+    // Scale to fit within maxW x maxH while preserving aspect ratio — never upscale
+    const scaleW = Math.min(1, maxW / srcW);
+    const scaleH = Math.min(1, maxH / srcH);
+    const scale  = Math.min(scaleW, scaleH);
+    w = Math.max(1, Math.round(srcW * scale));
+    h = Math.max(1, Math.round(srcH * scale));
+  } else if (qualityMode === 'divine') {
+    // Scale to fit within 200×500, preserving aspect ratio, never upscale
+    const scaleW = Math.min(1, 200 / srcW);
+    const scaleH = Math.min(1, 500 / srcH);
+    const scale  = Math.min(scaleW, scaleH);
+    w = Math.max(1, Math.round(srcW * scale));
+    h = Math.max(1, Math.round(srcH * scale));
+  } else if (qualityMode === 'pixel') {
+    // Auto-detect the pixel art grid size by finding the GCD of colour-change run lengths
+    w = srcW;
+    h = srcH;
+  } else {
+    const maxSize = Math.min(200, parseInt(document.getElementById('maxSize').value) || 96);
+    w = srcW; h = srcH;
+    const lg = Math.max(w, h);
+    // Only downscale — never stretch a small image
+    if (lg > maxSize) { const ratio = maxSize / lg; w = Math.round(w * ratio); h = Math.round(h * ratio); }
+  }
+
+  // Update canvas size fields to reflect actual rendered size (pixel mode sets w/h later)
+  // — updated after draw block below
+
+  // Step-down scaling: halve resolution repeatedly until close to target,
+  // then do one final draw. This prevents bilinear blending from crushing bright
+  // small regions (like eye whites) into the surrounding dark pixels.
+  // In pixel mode: skip entirely — read raw source pixels directly.
+  const tmpC = document.createElement('canvas');
+  tmpC.width=srcW; tmpC.height=srcH;
+  const tmpCtx = tmpC.getContext('2d');
+  const srcId = tmpCtx.createImageData(srcW,srcH);
+  srcId.data.set(srcPixels);
+  tmpCtx.putImageData(srcId,0,0);
+
+  let curW = srcW, curH = srcH;
+  let curC = tmpC, curCtx2 = tmpCtx;
+
+  if (qualityMode === 'pixel') {
+    // ── Detect pixel art grid size ──
+    // Strategy: scan rows + cols for colour-change run lengths.
+    // The mode (most frequent run >= 4px) is the logical pixel block size.
+    const raw = srcPixels;
+    const freq = new Map();
+    const TOL = 24;
+
+    // Horizontal scan, every 3rd row
+    for (let y = 0; y < srcH; y += 3) {
+      let run = 1;
+      let pr = raw[(y*srcW)*4], pg = raw[(y*srcW)*4+1], pb = raw[(y*srcW)*4+2];
+      for (let x = 1; x < srcW; x++) {
+        const i = (y*srcW+x)*4;
+        const cr = raw[i], cg = raw[i+1], cb = raw[i+2];
+        if (Math.abs(cr-pr)<TOL && Math.abs(cg-pg)<TOL && Math.abs(cb-pb)<TOL) {
+          run++;
+        } else {
+          freq.set(run, (freq.get(run)||0) + 1);
+          run = 1; pr=cr; pg=cg; pb=cb;
+        }
+      }
+      freq.set(run, (freq.get(run)||0) + 1);
+    }
+    // Vertical scan, every 3rd col
+    for (let x = 0; x < srcW; x += 3) {
+      let run = 1;
+      let pr = raw[x*4], pg = raw[x*4+1], pb = raw[x*4+2];
+      for (let y = 1; y < srcH; y++) {
+        const i = (y*srcW+x)*4;
+        const cr = raw[i], cg = raw[i+1], cb = raw[i+2];
+        if (Math.abs(cr-pr)<TOL && Math.abs(cg-pg)<TOL && Math.abs(cb-pb)<TOL) {
+          run++;
+        } else {
+          freq.set(run, (freq.get(run)||0) + 1);
+          run = 1; pr=cr; pg=cg; pb=cb;
+        }
+      }
+      freq.set(run, (freq.get(run)||0) + 1);
+    }
+
+    // Mode of runs >= 4 (skip single-pixel anti-alias noise)
+    let blockSize = 1, bestCount = 0;
+    for (const [run, count] of freq.entries()) {
+      if (run >= 4 && count > bestCount) { bestCount = count; blockSize = run; }
+    }
+
+    let detW = Math.round(srcW / blockSize);
+    let detH = Math.round(srcH / blockSize);
+    if (detW > 200) { const r = 200 / detW; detW = 200; detH = Math.round(detH * r); }
+    w = Math.max(1, detW);
+    h = Math.max(1, detH);
+
+    // Draw using nearest-neighbour (no smoothing) at detected size
+    workCanvas.width=w; workCanvas.height=h;
+    wCtx.imageSmoothingEnabled = false;
+    wCtx.clearRect(0,0,w,h);
+    wCtx.drawImage(tmpC, 0, 0, srcW, srcH, 0, 0, w, h);
+  } else {
+    // Step-down: halve until we're within 2x of target
+    curCtx2.imageSmoothingEnabled = true;
+    curCtx2.imageSmoothingQuality = 'high';
+
+    while (curW / 2 >= w && curH / 2 >= h) {
+      const nw = Math.round(curW / 2), nh = Math.round(curH / 2);
+      const stepC = document.createElement('canvas');
+      stepC.width = nw; stepC.height = nh;
+      const stepCtx = stepC.getContext('2d');
+      stepCtx.imageSmoothingEnabled = true;
+      stepCtx.imageSmoothingQuality = 'high';
+      stepCtx.drawImage(curC, 0, 0, curW, curH, 0, 0, nw, nh);
+      curC = stepC; curCtx2 = stepCtx;
+      curW = nw; curH = nh;
+    }
+
+    // Final draw to exact target size
+    workCanvas.width=w; workCanvas.height=h;
+    wCtx.imageSmoothingEnabled = true;
+    wCtx.imageSmoothingQuality = 'high';
+    wCtx.clearRect(0,0,w,h);
+    wCtx.drawImage(curC, 0, 0, curW, curH, 0, 0, w, h);
+  }
+
+  let px;
+  // Update canvas size fields now that w/h are finalised
+  document.getElementById('newW').value = w;
+  document.getElementById('newH').value = h;
+  try { px = wCtx.getImageData(0,0,w,h).data; } catch(e) { return; }
+
+  // Apply contrast/sat/bright as a pre-pass into a working buffer
+  const adjBuf = new Float32Array(px.length);
+  for(let i=0;i<px.length;i+=4){
+    const [ar,ag,ab] = applyImageAdjust(px[i],px[i+1],px[i+2]);
+    adjBuf[i]=ar; adjBuf[i+1]=ag; adjBuf[i+2]=ab; adjBuf[i+3]=px[i+3];
+  }
+
+  // Dithering pre-pass (Floyd-Steinberg modifies the buffer in place)
+  const ditherAmt = parseInt(document.getElementById('ditherSlider').value)||0;
+  const ditherMode = document.getElementById('ditherMode').value;
+  let workBuf = adjBuf;
+  if(ditherAmt > 0 && ditherMode === 'floyd'){
+    workBuf = applyFloydSteinberg(adjBuf, w, h, ditherAmt);
+  }
+
+  cW=w; cH=h;
+  const prevPixels = pixels.slice();
+  const prevManual = manualPixels.slice();
+  pixels = new Array(cW*cH).fill(null);
+
+  const SKIP_TOL = getSkip().tol;
+
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const i=(y*w+x)*4;
+      const a=px[i+3];
+      if(a<10) continue;
+      const {skip,sr,sg,sb} = getSkip();
+      const or=px[i],og=px[i+1],ob=px[i+2];
+      if(skip && Math.abs(or-sr)<=SKIP_TOL && Math.abs(og-sg)<=SKIP_TOL && Math.abs(ob-sb)<=SKIP_TOL) continue;
+      let r=workBuf[i], g=workBuf[i+1], b=workBuf[i+2];
+      // Bayer dithering applied per-pixel on top
+      if(ditherAmt>0 && ditherMode==='bayer'){
+        const off=bayerOffset(x,y,ditherAmt);
+        r=Math.min(255,Math.max(0,r+off));
+        g=Math.min(255,Math.max(0,g+off));
+        b=Math.min(255,Math.max(0,b+off));
+      }
+      pixels[y*w+x] = closestWood(r,g,b);
+    }
+  }
+  // Preserve manually painted pixels: if canvas size changed, manual marks can't
+  // map 1:1, so we only preserve if dimensions match (i.e. only wood set changed)
+  if (prevManual && prevManual.length === pixels.length) {
+    // Same canvas size: restore manual overrides on top of freshly re-mapped pixels
+    manualPixels = prevManual.slice(); // carry over manual mask
+    for (let i = 0; i < pixels.length; i++) {
+      if (prevManual[i]) {
+        pixels[i] = prevPixels[i]; // keep what user painted
+      }
+    }
+  } else {
+    // Canvas size changed — old manual coords don't map, reset tracking
+    manualPixels = new Uint8Array(cW * cH);
+  }
+  undoStack=[]; redoStack=[];
+  updateCanvasSize();
+  renderCanvas();
+  document.getElementById('canvasSizeLabel').textContent=cW+' × '+cH+' px';
+}
+
+document.getElementById('fileInput').addEventListener('change',function(){
+  if(this.files&&this.files.length>0) loadImage(this.files[0]);
+});
+const dz=document.getElementById('dropZone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dov')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dov'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('dov');
+  if(e.dataTransfer.files&&e.dataTransfer.files.length>0) loadImage(e.dataTransfer.files[0]);
+});
+
+// Quality presets
+const QUALITY = { low: 48, med: 96, high: 200 };
+let qualityMode = 'med';
+function setQuality(q) {
+  qualityMode = q;
+  ['low','med','high','custom','pixel','divine'].forEach(k => {
+    const el = document.getElementById('q'+k[0].toUpperCase()+k.slice(1));
+    if(el) el.classList.remove('active');
+  });
+  document.getElementById('q'+q[0].toUpperCase()+q.slice(1)).classList.add('active');
+  const isCustom = q === 'custom';
+  const isPixel  = q === 'pixel';
+  const isDivine = q === 'divine';
+  document.getElementById('maxSizeRow').style.display    = (!isCustom && !isPixel && !isDivine) ? 'flex'  : 'none';
+  document.getElementById('customSizeRow').style.display = isCustom ? 'block' : 'none';
+  if(!isCustom && !isPixel && !isDivine) document.getElementById('maxSize').value = QUALITY[q] || 96;
+  debouncedReRender();
+}
+
+// Re-render from source only when Max Edge changes (preserves manual paints)
+document.getElementById('maxSize').addEventListener('change', () => { debouncedReRender(); });
+
+// ── Proc block toggles ──
+function toggleProc(n) {
+  const body = document.getElementById('procBody'+n);
+  const tog  = document.getElementById('procToggle'+n);
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  tog.classList.toggle('open', open);
+}
+
+// ── Debounced rerender ──
+let _reRenderTimer = null;
+function debouncedReRender() {
+  if(!srcPixels) return;
+  clearTimeout(_reRenderTimer);
+  _reRenderTimer = setTimeout(() => reRenderFromSource(), 80);
+}
+
+// ── Image adjustment sliders ──
+function setupLiveSlider(id, valId) {
+  const el = document.getElementById(id);
+  const vl = document.getElementById(valId);
+  // Slider → number input
+  el.addEventListener('input', () => {
+    vl.value = el.value;
+    debouncedReRender();
+  });
+  // Number input → slider
+  vl.addEventListener('input', () => {
+    const mn=parseFloat(el.min), mx=parseFloat(el.max);
+    let v = parseFloat(vl.value);
+    if(isNaN(v)) return;
+    v = Math.max(mn, Math.min(mx, v));
+    el.value = v;
+    vl.value = v;
+    debouncedReRender();
+  });
+}
+setupLiveSlider('contrastSlider','contrastVal');
+setupLiveSlider('satSlider','satVal');
+setupLiveSlider('brightSlider','brightVal');
+setupLiveSlider('ditherSlider','ditherVal');
+setupLiveSlider('skipTolSlider','skipTolVal');
+// Brush size: number input → slider
+document.getElementById('brushSizeVal').addEventListener('input', function(){
+  let v = parseInt(this.value);
+  if(isNaN(v)) return;
+  v = Math.max(1, Math.min(12, v));
+  brushSize = v;
+  this.value = v;
+  document.getElementById('brushSize').value = v;
+});
+document.getElementById('skipColor').addEventListener('change', () => { debouncedReRender(); });
+
+function resetImageAdjust() {
+  document.getElementById('contrastSlider').value=0; document.getElementById('contrastVal').value=0;
+  document.getElementById('satSlider').value=0;      document.getElementById('satVal').value=0;
+  document.getElementById('brightSlider').value=0;    document.getElementById('brightVal').value=0;
+  if(srcPixels) reRenderFromSource();
+}
+
+// Apply contrast / saturation / brightness to one pixel
+function applyImageAdjust(r,g,b){
+  const contrast = parseInt(document.getElementById('contrastSlider').value);
+  const sat      = parseInt(document.getElementById('satSlider').value);
+  const bright   = parseInt(document.getElementById('brightSlider').value);
+  r = Math.min(255,Math.max(0, r + bright*2.55));
+  g = Math.min(255,Math.max(0, g + bright*2.55));
+  b = Math.min(255,Math.max(0, b + bright*2.55));
+  const cf = (259*(contrast+255))/(255*(259-contrast));
+  r = Math.min(255,Math.max(0, cf*(r-128)+128));
+  g = Math.min(255,Math.max(0, cf*(g-128)+128));
+  b = Math.min(255,Math.max(0, cf*(b-128)+128));
+  const lum = 0.299*r+0.587*g+0.114*b;
+  const sf  = 1 + sat/100;
+  r = Math.min(255,Math.max(0, lum+sf*(r-lum)));
+  g = Math.min(255,Math.max(0, lum+sf*(g-lum)));
+  b = Math.min(255,Math.max(0, lum+sf*(b-lum)));
+  return [r,g,b];
+}
+
+// ── Floyd-Steinberg dithering ──
+function applyFloydSteinberg(data, w, h, amount) {
+  // Work on a float copy
+  const buf = new Float32Array(data.length);
+  for(let i=0;i<data.length;i++) buf[i]=data[i];
+  const t = amount/100;
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const i=(y*w+x)*4;
+      const or=buf[i],og=buf[i+1],ob=buf[i+2];
+      const wood=closestWood(or,og,ob);
+      const [wr,wg,wb]=WOODS[wood];
+      const er=(or-wr)*t, eg=(og-wg)*t, eb=(ob-wb)*t;
+      // distribute error
+      if(x+1<w){   buf[i+4]+=er*7/16;  buf[i+5]+=eg*7/16;  buf[i+6]+=eb*7/16; }
+      if(y+1<h){
+        if(x>0){   buf[(i+w*4-4)]+=er*3/16; buf[(i+w*4-3)]+=eg*3/16; buf[(i+w*4-2)]+=eb*3/16; }
+                   buf[(i+w*4)]  +=er*5/16; buf[(i+w*4+1)]+=eg*5/16; buf[(i+w*4+2)]+=eb*5/16;
+        if(x+1<w){ buf[(i+w*4+4)]+=er*1/16; buf[(i+w*4+5)]+=eg*1/16; buf[(i+w*4+6)]+=eb*1/16; }
+      }
+    }
+  }
+  return buf;
+}
+
+// ── Bayer 4×4 ordered dithering ──
+const BAYER4 = [
+   0, 8, 2,10,
+  12, 4,14, 6,
+   3,11, 1, 9,
+  15, 7,13, 5
+];
+function bayerOffset(x,y,amount){
+  const v = BAYER4[(y%4)*4+(x%4)]/16 - 0.5; // -0.5..+0.5
+  return v * (amount/100) * 80; // scale to ~rgb range
+}
+
+function getSkip(){
+  const hex=document.getElementById('skipColor').value.trim();
+  const tol=parseInt(document.getElementById('skipTolSlider').value);
+  if(/^#[0-9a-fA-F]{6}$/.test(hex))
+    return{skip:true,sr:parseInt(hex.slice(1,3),16),sg:parseInt(hex.slice(3,5),16),sb:parseInt(hex.slice(5,7),16),tol};
+  return{skip:false,sr:255,sg:255,sb:255,tol};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PIECE PACKING
+// ═══════════════════════════════════════════════════════════════
+function packPixels(grid, w, h) {
+  const placed=[];
+  const bd={Floor1Large:0,Floor1:0,Floor1Small:0,Floor1Tiny:0,Post:0};
+  const used = new Uint8Array(w*h);
+
+  // Check if an s×s block at (x,y) is all the same wood and unused
+  function canPlace(x, y, s, wood) {
+    if (x+s > w || y+s > h) return false;
+    for (let dy=0; dy<s; dy++)
+      for (let dx=0; dx<s; dx++) {
+        const i=(y+dy)*w+(x+dx);
+        if (used[i] || grid[i]!==wood) return false;
+      }
+    return true;
+  }
+
+  function markUsed(x, y, s) {
+    for (let dy=0; dy<s; dy++)
+      for (let dx=0; dx<s; dx++)
+        used[(y+dy)*w+(x+dx)]=1;
+  }
+
+  // Greedy: try largest square pieces first at every pixel
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      if(used[y*w+x]) continue;
+      const wood=grid[y*w+x];
+      if(!wood) continue;
+
+      if(canPlace(x,y,8,wood)){
+        placed.push({x,y,wood,piece:'Floor1Large',pw:8,ph:8});
+        markUsed(x,y,8); bd.Floor1Large++;
+      } else if(canPlace(x,y,4,wood)){
+        placed.push({x,y,wood,piece:'Floor1',pw:4,ph:4});
+        markUsed(x,y,4); bd.Floor1++;
+      } else if(canPlace(x,y,2,wood)){
+        placed.push({x,y,wood,piece:'Floor1Small',pw:2,ph:2});
+        markUsed(x,y,2); bd.Floor1Small++;
+      } else {
+        // Try horizontal Post (4 wide × 1 tall) — no rotation needed
+        let canPostH = (x+4<=w);
+        if(canPostH){
+          for(let dx=0;dx<4;dx++){
+            const i=y*w+(x+dx);
+            if(used[i]||grid[i]!==wood){canPostH=false;break;}
+          }
+        }
+        // Try vertical Post (1 wide × 4 tall) — needs 90° Y rotation
+        let canPostV = (y+4<=h);
+        if(canPostV){
+          for(let dy=0;dy<4;dy++){
+            const i=(y+dy)*w+x;
+            if(used[i]||grid[i]!==wood){canPostV=false;break;}
+          }
+        }
+        if(canPostH){
+          placed.push({x,y,wood,piece:'Post',pw:4,ph:1,rotY:0});
+          for(let dx=0;dx<4;dx++) used[y*w+(x+dx)]=1;
+          bd.Post++;
+        } else if(canPostV){
+          placed.push({x,y,wood,piece:'Post',pw:1,ph:4,rotY:90});
+          for(let dy=0;dy<4;dy++) used[(y+dy)*w+x]=1;
+          bd.Post++;
+        } else {
+          placed.push({x,y,wood,piece:'Floor1Tiny',pw:1,ph:1,rotY:0});
+          used[y*w+x]=1; bd.Floor1Tiny++;
+        }
+      }
+    }
+  }
+  return{placed,bd};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONVERT
+// ═══════════════════════════════════════════════════════════════
+let luaCache = '';
+
+function fmt(n){return parseFloat(n.toFixed(4));}
+
+function doConvert(){
+  const t0=performance.now();
+  const scale=parseFloat(document.getElementById('scale').value)||1;
+  const yLevel=parseFloat(document.getElementById('yLevel').value)||10;
+  const originX=parseFloat(document.getElementById('originX').value)||0;
+  const originZ=parseFloat(document.getElementById('originZ').value)||0;
+  const plane=document.getElementById('plane').value;
+  const w=cW, h=cH;
+
+  // Use pixels array (wood strings), excluding disabled woods
+  const grid=pixels.map(p => (!p||disabledWoods.has(p)) ? null : p);
+
+  let totalPx=0;
+  for(const p of grid) if(p) totalPx++;
+
+  const{placed,bd}=packPixels(grid,w,h);
+
+
+
+  const L=[];
+  L.push('-- LT2 Image Converter | AddBP Format');
+  L.push('-- Canvas: '+w+'x'+h+' px  |  Parts: '+placed.length+'  |  Pixels: '+totalPx);
+  L.push('-- Generated: '+new Date().toISOString());
+  L.push('-- Pieces: Large='+bd.Floor1Large+' | 4x4='+bd.Floor1+' | Small='+bd.Floor1Small+' | Tiny='+bd.Floor1Tiny+' | Post='+bd.Post);
+  L.push('-- Scale: '+scale);
+  L.push('');
+  L.push('local origin = CFrame.new('+originX+', '+yLevel+', '+originZ+')');
+  L.push('');
+
+  for(const{x,y,wood,piece,pw,ph,rotY}of placed){
+    const isPost = piece === 'Post';
+    const halfX = fmt(pw * scale / 2);
+    const halfZ = fmt(ph * scale / 2);
+    const cx = fmt(x * scale + halfX);
+    const cy = fmt(y * scale + halfZ);
+    let cf;
+    if(plane==='xz'){
+      const base='CFrame.new('+fmt(originX+cx)+', '+yLevel+', '+fmt(originZ+cy)+')';
+      cf = (isPost && rotY===90) ? base+'*CFrame.Angles(0,math.pi/2,0)' : base;
+    } else {
+      const wallY = fmt((h - y) * scale - halfZ);
+      cf='origin*CFrame.Angles(0,0,0)+Vector3.new('+cx+','+wallY+',0)';
+    }
+    L.push("AddBP('"+piece+"',"+cf+",'"+wood+"')");
+  }
+
+  const elapsed=((performance.now()-t0)/1000).toFixed(2);
+  luaCache=L.join('\n');
+  document.getElementById('output').textContent=luaCache;
+  document.getElementById('statParts').textContent=placed.length.toLocaleString();
+  document.getElementById('statPixels').textContent=totalPx.toLocaleString();
+  document.getElementById('statSaved').textContent=(totalPx-placed.length).toLocaleString();
+  document.getElementById('statTime').textContent=elapsed+'s';
+  document.getElementById('statSize').textContent=w+'x'+h;
+  document.getElementById('statsRow').style.display='block';
+  document.getElementById('breakdown').innerHTML=
+    '<span class="bk l">Floor1Large x'+bd.Floor1Large.toLocaleString()+'</span>'+
+    '<span class="bk m">Floor1 x'+bd.Floor1.toLocaleString()+'</span>'+
+    '<span class="bk s">Floor1Small x'+bd.Floor1Small.toLocaleString()+'</span>'+
+    '<span class="bk t">Floor1Tiny x'+bd.Floor1Tiny.toLocaleString()+'</span>'+
+    (bd.Post ? '<span class="bk t">Post x'+bd.Post.toLocaleString()+'</span>' : '')+
+    '';
+}
+
+function copyLua(){
+  const text = luaCache || document.getElementById('output').textContent || '';
+  if(!text || text.startsWith('-- Load an image')) { alert('Generate Lua first!'); return; }
+  const btn = document.getElementById('copyBtn');
+  // Use fallback for environments where clipboard API may fail
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(()=>{
+      btn.textContent='✓ Copied!'; btn.classList.add('ok');
+      setTimeout(()=>{btn.textContent='Copy to Clipboard';btn.classList.remove('ok')},2000);
+    }).catch(()=>{ fallbackCopy(text, btn); });
+  } else {
+    fallbackCopy(text, btn);
+  }
+}
+function fallbackCopy(text, btn) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try {
+    document.execCommand('copy');
+    btn.textContent='✓ Copied!'; btn.classList.add('ok');
+    setTimeout(()=>{btn.textContent='Copy to Clipboard';btn.classList.remove('ok')},2000);
+  } catch(e) { alert('Copy failed — please use Ctrl+A then Ctrl+C on the output box.'); }
+  document.body.removeChild(ta);
+}
+function downloadLua(){
+  if(!luaCache) return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([luaCache],{type:'text/plain'}));
+  a.download='lt2_'+Date.now()+'.lua';
+  a.click();URL.revokeObjectURL(a.href);
+}
+
+// Mousewheel zoom on canvas
+document.getElementById('canvasOuter').addEventListener('wheel', e=>{
+  e.preventDefault();
+  applyZoom(zoom + (e.deltaY<0?1:-1));
+},{passive:false});
+
+// Stop pan if mouse released outside canvas
+document.addEventListener('mouseup', e => {
+  if (isPanning && e.button === 1) {
+    isPanning = false;
+    outer.style.cursor = (activeTool==='fill'||activeTool==='fill-erase') ? 'cell' : 'none';
+  }
+  // Clear line/shape preview if mouse released outside canvas
+  if ((activeTool==='line'||activeTool==='shape') && isDrawing) {
+    pCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+    shapeStart = null;
+    isDrawing = false;
+  }
+});
+
+// Prevent middle-click scroll popup in some browsers
+// ═══════════════════════════════════════════════════════════════
+// OUTPUT TABS
+// ═══════════════════════════════════════════════════════════════
+function switchOutTab(tab) {
+  document.getElementById('paneGenerate').style.display = tab === 'generate' ? 'block' : 'none';
+  document.getElementById('paneImport').style.display   = tab === 'import'   ? 'block' : 'none';
+  document.getElementById('tabGenerate').classList.toggle('active', tab === 'generate');
+  document.getElementById('tabImport').classList.toggle('active',   tab === 'import');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LUA → CANVAS IMPORTER
+// ═══════════════════════════════════════════════════════════════
+function importFromInput() {
+  const src = document.getElementById('importInput').value.trim();
+  if (!src) { setImportStatus('NOTHING PASTED', 'red'); return; }
+  importFromText(src);
+}
+
+function importFromText(src) {
+
+  // Parse canvas size from comment if present: "-- Canvas: WxH px"
+  let parsedW = 0, parsedH = 0;
+  const sizeMatch = src.match(/Canvas:\s*(\d+)x(\d+)/i);
+  if (sizeMatch) { parsedW = parseInt(sizeMatch[1]); parsedH = parseInt(sizeMatch[2]); }
+
+  // Parse origin CFrame values
+  // e.g. local origin = CFrame.new(0, 10, 0)
+  let originX = 0, originZ = 0, scale = 1;
+  const originMatch = src.match(/CFrame\.new\(\s*([\-\d.]+)\s*,\s*([\-\d.]+)\s*,\s*([\-\d.]+)\s*\)/);
+  if (originMatch) { originX = parseFloat(originMatch[1]); originZ = parseFloat(originMatch[3]); }
+
+  // Normalize aliases: Cea(...) → CFrame.Angles(...), Vec(...) → Vector3.new(...)
+  const normSrc = src.replace(/\bCea\b/g, 'CFrame.Angles').replace(/\bVec\b/g, 'Vector3.new');
+
+  const placed = [];
+  let m;
+  // Helper: parse rotation Z from CFrame.Angles string, detect if piece is rotated 90°
+  function getPieceDims(piece, anglesStr) {
+    const dims = PIECE_DIMS[piece] || {w:1, h:1};
+    if (dims.w === dims.h) return dims; // square, rotation doesn't matter
+    const parts = (anglesStr || '').split(',').map(s => parseFloat(s.trim()));
+    const zRot = parts[2] || 0;
+    const rotated90 = Math.abs(Math.abs(zRot) - Math.PI / 2) < 0.05;
+    return rotated90 ? {w: dims.h, h: dims.w} : dims;
+  }
+
+  const _N = '([-\\d.]+)';
+  const _A = '[-\\d.]+';
+  const _S = '\\s*';
+  // XZ plane — capture angles string for rotation detection
+  const reXZ = new RegExp(
+    `AddBP\\('([^']+)'${_S},${_S}(?:\\w+\\s*\\*\\s*)?CFrame\\.(?:Angles|new)\\(([^)]*)\\)${_S}[+*]${_S}Vector3\\.new\\(${_S}${_N}${_S},${_S}${_A}${_S},${_S}${_N}${_S}\\)${_S},'([^']+)'\\)`, 'g'
+  );
+  while ((m = reXZ.exec(normSrc)) !== null) {
+    const piece = m[1], angles = m[2], cx = parseFloat(m[3]), cz = parseFloat(m[4]), wood = m[5];
+    const dims = getPieceDims(piece, angles);
+    placed.push({ piece, cx, cy: cz, wood, pw: dims.w, ph: dims.h });
+  }
+  // Detect wall-plane art (constant X): re-parse all 3 coords, use Y,Z as grid
+  {
+    const FLOOR_PIECES = new Set(['Floor1Large','Floor1','Floor1Small','Floor1Tiny']);
+    const _N3 = '([-\\d.]+)';
+    const reXZ3 = new RegExp(
+      `AddBP\\('([^']+)'${_S},${_S}(?:\\w+\\s*\\*\\s*)?CFrame\\.(?:Angles|new)\\(([^)]*)\\)${_S}[+*]${_S}Vector3\\.new\\(${_S}${_N3}${_S},${_S}${_N3}${_S},${_S}${_N3}${_S}\\)${_S},'([^']+)'\\)`, 'g'
+    );
+    const all3 = [];
+    while ((m = reXZ3.exec(normSrc)) !== null) {
+      all3.push({ piece: m[1], angles: m[2], vx: parseFloat(m[3]), vy: parseFloat(m[4]), vz: parseFloat(m[5]), wood: m[6] });
+    }
+    if (all3.length) {
+      const xVals = all3.map(p => Math.round(p.vx * 10));
+      const yVals = all3.map(p => Math.round(p.vy * 10));
+      const xConst = (new Set(xVals)).size === 1;
+      const yConst = (new Set(yVals)).size === 1;
+      if (xConst || yConst) {
+        // Wall-plane art: filter to floor pieces only, remap coords
+        placed.length = 0;
+        all3.forEach(p => {
+          if (!FLOOR_PIECES.has(p.piece)) return;
+          const dims = getPieceDims(p.piece, p.angles);
+          const cx = xConst ? p.vy : p.vx;
+          const cy = xConst ? p.vz : p.vz;
+          placed.push({ piece: p.piece, cx, cy, wood: p.wood, pw: dims.w, ph: dims.h });
+        });
+      }
+    }
+  }
+  // Wall plane
+  if (!placed.length) {
+    const reWall = new RegExp(
+      `AddBP\\('([^']+)'${_S},${_S}(?:\\w+\\s*\\*\\s*)?CFrame\\.(?:Angles|new)\\(([^)]*)\\)${_S}[+*]${_S}Vector3\\.new\\(${_S}${_N}${_S},${_S}${_N}${_S},${_S}0${_S}\\)${_S},'([^']+)'\\)`, 'g'
+    );
+    while ((m = reWall.exec(normSrc)) !== null) {
+      const piece = m[1], angles = m[2], cx = parseFloat(m[3]), cy = parseFloat(m[4]), wood = m[5];
+      const dims = getPieceDims(piece, angles);
+      placed.push({ piece, cx, cy, wood, pw: dims.w, ph: dims.h });
+    }
+  }
+  // Fallback: any AddBP with Vector3.new
+  if (!placed.length) {
+    const reFB = new RegExp(
+      `AddBP\\('([^']+)'[^,]*,\\s*[^V]*Vector3\\.new\\(\\s*([-\\d.]+)\\s*,\\s*([-\\d.]+)\\s*,\\s*([-\\d.]+)\\s*\\)[^,]*,\\s*'([^']+)'\\)`, 'g'
+    );
+    while ((m = reFB.exec(normSrc)) !== null) {
+      const piece = m[1], cx = parseFloat(m[2]), cy = parseFloat(m[3]), wood = m[5];
+      const dims = PIECE_DIMS[piece] || {w:1, h:1};
+      placed.push({ piece, cx, cy, wood, pw: dims.w, ph: dims.h });
+    }
+  }
+
+  if (!placed.length) {
+    const lineCount = (src.match(/AddBP/g) || []).length;
+    setImportStatus('NO AddBP LINES FOUND — ' + lineCount + ' AddBP occurrences detected (format mismatch?)', 'red');
+    console.log('[import] src preview:', src.slice(0, 500));
+    return;
+  }
+
+  // Scale detection — read from comment if available (most reliable)
+  let detectedScale = 1;
+  const scaleCommentMatch = src.match(/--\s*Scale:\s*(\d+)/);
+  if (scaleCommentMatch) {
+    detectedScale = parseInt(scaleCommentMatch[1]) || 1;
+  } else {
+    // Fallback: infer from Tiny pieces at origin — cx of a Tiny at gx=0 is scale/2
+    const tinyPieces = placed.filter(p => p.piece === 'Floor1Tiny');
+    if (tinyPieces.length) {
+      // Try each Tiny: scale = cx*2 / (2*gx+1) where gx>=0. gx=0 gives minimum.
+      // Use the minimum cx to get the Tiny closest to origin
+      const minCX = Math.min(...tinyPieces.map(p => p.cx).filter(v => v > 0));
+      detectedScale = Math.round(minCX * 2) || 1;
+    } else {
+      // Use smallest square piece closest to origin
+      const squarePieces = placed.filter(p => PIECE_DIMS[p.piece] && PIECE_DIMS[p.piece].w === PIECE_DIMS[p.piece].h);
+      if (squarePieces.length) {
+        // For a square piece of stud size s at gx=0: cx = s*scale/2, so scale = cx*2/s
+        // Sort by cx to find the one closest to origin
+        squarePieces.sort((a,b) => a.cx - b.cx);
+        const sp = squarePieces[0];
+        const s = PIECE_STUD[sp.piece] || 1;
+        detectedScale = Math.round((sp.cx * 2) / s) || 1;
+      }
+    }
+  }
+  scale = detectedScale;
+
+  // Try canvas-relative decoding first (floor-piece style)
+  let gridPixels = placed.map(p => {
+    const halfW = (p.pw * scale) / 2;
+    const halfH = (p.ph * scale) / 2;
+    const gx = Math.round((p.cx - halfW) / scale);
+    const gy = Math.round((p.cy - halfH) / scale);
+    return { gx, gy, wood: p.wood, pw: p.pw, ph: p.ph };
+  });
+
+  // Detect if coords look like world-space: check if cx values are non-half-integer
+  // For canvas-relative: cx % scale should be close to scale/2
+  // For world-space: cx values will be irregular
+  const allFloor = placed.every(p => PIECE_DIMS[p.piece] && PIECE_DIMS[p.piece].w === PIECE_DIMS[p.piece].h);
+  const hasOnlyRectPieces = placed.every(p => !PIECE_DIMS[p.piece] || PIECE_DIMS[p.piece].w !== PIECE_DIMS[p.piece].h);
+  if (hasOnlyRectPieces && placed.length) {
+    // World-space fallback: map unique cx/cy values to grid indices
+    const uniqCX = [...new Set(placed.map(p => Math.round(p.cx * 10)))].sort((a,b)=>a-b);
+    const uniqCY = [...new Set(placed.map(p => Math.round(p.cy * 10)))].sort((a,b)=>a-b);
+    const colMap = Object.fromEntries(uniqCX.map((v,i) => [v, i]));
+    const rowMap = Object.fromEntries(uniqCY.map((v,i) => [v, i]));
+    gridPixels = placed.map(p => ({
+      gx: colMap[Math.round(p.cx * 10)] * p.pw,
+      gy: rowMap[Math.round(p.cy * 10)] * p.ph,
+      wood: p.wood, pw: p.pw, ph: p.ph
+    }));
+  }
+
+  // Auto-shift: ensure min is 0
+  const minGX = Math.min(...gridPixels.map(p => p.gx));
+  const minGY = Math.min(...gridPixels.map(p => p.gy));
+  const shiftX = minGX < 0 ? -minGX : 0;
+  const shiftY = minGY < 0 ? -minGY : 0;
+  if (shiftX || shiftY) for (const p of gridPixels) { p.gx += shiftX; p.gy += shiftY; }
+
+  // Find canvas bounds
+  let maxX = 0, maxY = 0;
+  for (const p of gridPixels) {
+    maxX = Math.max(maxX, p.gx + p.pw);
+    maxY = Math.max(maxY, p.gy + p.ph);
+  }
+
+  const newW = parsedW || maxX;
+  const newH = parsedH || maxY;
+
+  if (newW < 1 || newH < 1 || newW > 512 || newH > 512) {
+    setImportStatus('CANVAS SIZE OUT OF RANGE', 'red'); return;
+  }
+
+  // Build pixel grid
+  pushUndo();
+  cW = newW; cH = newH;
+  pixels = new Array(cW * cH).fill(null);
+  manualPixels = new Uint8Array(cW * cH);
+
+  for (const p of gridPixels) {
+    const wood = WOODS[p.wood] ? p.wood : null;
+    if (!wood) continue;
+    for (let dy = 0; dy < p.ph; dy++) {
+      for (let dx = 0; dx < p.pw; dx++) {
+        const px = p.gx + dx, py = p.gy + dy;
+        if (px >= 0 && px < cW && py >= 0 && py < cH) {
+          pixels[py * cW + px] = wood;
+          manualPixels[py * cW + px] = 1;
+        }
+      }
+    }
+  }
+
+  // Update UI
+  document.getElementById('newW').value = cW;
+  document.getElementById('newH').value = cH;
+  document.getElementById('canvasSizeLabel').textContent = cW + ' × ' + cH + ' px';
+  undoStack = []; redoStack = [];
+  updateCanvasSize();
+  renderCanvas();
+
+  // Update convert settings to match
+  document.getElementById('originX').value = originX;
+  document.getElementById('originZ').value = originZ;
+  document.getElementById('scale').value = scale;
+
+  // Show breakdown from imported pieces
+  const ibd = {Floor1Large:0,Floor1:0,Floor1Small:0,Floor1Tiny:0,Post:0};
+  for (const p of placed) { if (ibd[p.piece] !== undefined) ibd[p.piece]++; }
+  document.getElementById('statParts').textContent = placed.length.toLocaleString();
+  document.getElementById('breakdown').innerHTML =
+    '<span class="bk l">Floor1Large x'+ibd.Floor1Large+'</span>'+
+    '<span class="bk m">Floor1 x'+ibd.Floor1+'</span>'+
+    '<span class="bk s">Floor1Small x'+ibd.Floor1Small+'</span>'+
+    '<span class="bk t">Floor1Tiny x'+ibd.Floor1Tiny+'</span>'+
+    (ibd.Post ? '<span class="bk t">Post x'+ibd.Post+'</span>' : '');
+
+  // Store raw import lines for passthrough export
+  const rawLines = [];
+  const rawRe = /AddBP\('[^']+',.*,'[^']+'\)/g;
+  let rawM;
+  while((rawM = src.replace(/\bCea\b/g,'CFrame.Angles').replace(/\bVec\b/g,'Vector3.new').match(/AddBP\('[^']+',.*?'[^']*'\)/g)||[]).length) {
+    // use split approach
+    break;
+  }
+  // Use line-by-line parse (safe)
+  src.split('\n').forEach(line => {
+    const t = line.trim();
+    if (t.startsWith('AddBP(')) rawLines.push(t);
+  });
+  rawImportLines = rawLines.length ? rawLines : null;
+  setImportStatus('✓ IMPORTED ' + placed.length + ' PARTS → ' + newW + 'x' + newH + ' CANVAS', 'lime');
+  switchOutTab('generate');
+  setTimeout(() => {
+    // Pick zoom so the larger dimension fills ~480px of the viewer
+    const TARGET_PX = 480;
+    const largerDim = Math.max(cW, cH);
+    const targetZoom = Math.max(1, Math.min(16, Math.floor(TARGET_PX / largerDim)));
+    applyZoom(targetZoom);
+    const outer = document.getElementById('canvasOuter');
+    outer.scrollTop = 0;
+    outer.scrollLeft = 0;
+    outer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 150);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO OUTLINE
+// ═══════════════════════════════════════════════════════════════
+const OUTLINE_WOODS = Object.keys(WOODS);
+function cycleOutlineWood() {
+  const idx = (OUTLINE_WOODS.indexOf(outlineWood) + 1) % OUTLINE_WOODS.length;
+  outlineWood = OUTLINE_WOODS[idx];
+  const col = WOODS[outlineWood];
+  document.getElementById('outlineSwatchDisplay').style.background = `rgb(${col[0]},${col[1]},${col[2]})`;
+  document.getElementById('outlineWoodName').textContent = outlineWood;
+}
+function applyOutline() {
+  pushUndo();
+  const mask = new Uint8Array(cW * cH);
+  const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
+  for (let y = 0; y < cH; y++) {
+    for (let x = 0; x < cW; x++) {
+      if (pixels[y*cW+x]) continue; // already filled
+      // Check if any neighbor is filled
+      let hasNeighbor = false;
+      for (const [dx,dy] of DIRS) {
+        const nx=x+dx, ny=y+dy;
+        if (nx>=0&&nx<cW&&ny>=0&&ny<cH&&pixels[ny*cW+nx]) { hasNeighbor=true; break; }
+      }
+      if (hasNeighbor) mask[y*cW+x] = 1;
+    }
+  }
+  // Apply outline pixels
+  lastOutlineMask = new Uint8Array(cW * cH);
+  for (let i = 0; i < cW*cH; i++) {
+    if (mask[i]) {
+      pixels[i] = outlineWood;
+      manualPixels[i] = 1;
+      lastOutlineMask[i] = 1;
+    }
+  }
+  renderCanvas();
+}
+function removeOutline() {
+  if (!lastOutlineMask) return;
+  pushUndo();
+  for (let i = 0; i < cW*cH; i++) {
+    if (lastOutlineMask[i]) {
+      pixels[i] = null;
+      manualPixels[i] = 0;
+    }
+  }
+  lastOutlineMask = null;
+  renderCanvas();
+}
+
+function setImportStatus(msg, col) {
+  const el = document.getElementById('importStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = col === 'lime' ? 'var(--lime)' : col === 'red' ? 'var(--red)' : 'var(--txt2)';
+}
+
+document.getElementById('canvasOuter').addEventListener('mousedown', e => {
+  if (e.button === 1) e.preventDefault();
+}, {passive: false});
+
+</script>
+</body>
+</html>
